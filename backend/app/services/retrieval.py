@@ -9,7 +9,10 @@ from app.vectorstore.embedding import embed, tokenize
 
 
 class HybridRetriever:
+    """Merge deterministic vector, lexical, and source-authority relevance signals."""
+
     def search(self, query: str, top_k: int = 5) -> list[dict[str, Any]]:
+        """Search all legal collections and return unique, ranked evidence records."""
         client = get_chroma_client()
         candidates = []
         query_tokens = tokenize(query)
@@ -32,6 +35,7 @@ class HybridRetriever:
             ):
                 vector_score = max(0.0, 1.0 - float(distance))
                 authority_weight = float(metadata.get("authority_weight", 0.5))
+                # Fixed weights keep retrieval reproducible across experiment runs.
                 score = 0.45 * vector_score + 0.4 * lexical + 0.15 * authority_weight
                 candidates.append(
                     {

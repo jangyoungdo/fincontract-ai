@@ -8,7 +8,6 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Dict
 
-
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_ROOT))
 
@@ -16,10 +15,12 @@ from app.rules import RuleEngine  # noqa: E402
 
 
 def ratio(numerator: int, denominator: int) -> float:
+    """Return a safe metric ratio for empty evaluation partitions."""
     return numerator / denominator if denominator else 0.0
 
 
 def main() -> int:
+    """Evaluate every versioned rule against a JSONL-labelled dataset."""
     parser = argparse.ArgumentParser()
     parser.add_argument("dataset", type=Path)
     parser.add_argument("--output", type=Path)

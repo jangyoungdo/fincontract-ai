@@ -16,6 +16,7 @@ def add_audit_event(
     document_id: str | None = None,
     analysis_id: str | None = None,
 ) -> None:
+    """Stage an audit event containing identifiers and state only, never document text."""
     session.add(
         AuditEvent(
             id=str(uuid.uuid4()),

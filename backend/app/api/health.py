@@ -8,17 +8,18 @@ from app.config import get_settings
 from app.models import get_engine
 from app.vectorstore.client import ensure_collections
 
-
 router = APIRouter(prefix="/health", tags=["health"])
 
 
 @router.get("/live")
 def live() -> dict[str, str]:
+    """Report that the API process is alive without probing dependencies."""
     return {"status": "alive"}
 
 
 @router.get("/ready")
 def ready(response: Response) -> dict:
+    """Probe database, retrieval storage, and the optional queue for readiness."""
     settings = get_settings()
     checks: dict[str, dict[str, str]] = {}
 

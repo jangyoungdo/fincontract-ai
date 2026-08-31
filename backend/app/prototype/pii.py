@@ -9,6 +9,7 @@ from typing import Dict, List, Pattern, Tuple
 
 @dataclass(frozen=True)
 class MaskingResult:
+    """Masked text plus evidence that the outbound PII gate was applied."""
     masked_text: str
     detected_types: List[str]
     replacement_count: int
@@ -39,6 +40,7 @@ PATTERNS: List[Tuple[str, Pattern[str]]] = [
 
 
 def mask_pii(text: str) -> MaskingResult:
+    """Replace supported identifiers and verify none of those patterns remain."""
     masked = text
     counters: Dict[str, int] = {}
     detected: List[str] = []
@@ -46,6 +48,7 @@ def mask_pii(text: str) -> MaskingResult:
 
     for pii_type, pattern in PATTERNS:
         def replace(match: re.Match[str]) -> str:
+            """Preserve contextual labels while replacing only the sensitive value."""
             nonlocal replacement_count
             counters[pii_type] = counters.get(pii_type, 0) + 1
             replacement_count += 1

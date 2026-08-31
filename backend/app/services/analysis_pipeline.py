@@ -8,15 +8,18 @@ from .retrieval import HybridRetriever
 
 
 class DocumentAnalysisPipeline:
+    """Coordinate clause-level masking, retrieval, assessment, and aggregation."""
     def __init__(self) -> None:
         self.prototype = PrototypePipeline()
         self.retriever = HybridRetriever()
 
     def run(self, text: str, experiment_arm: str) -> dict:
+        """Analyze each clause and preserve the strictest downstream disposition."""
         clauses = segment_clauses(text)
         results = []
         for clause in clauses:
             masking = mask_pii(clause.text)
+            # Retrieval happens before provider assessment and receives masked text only.
             evidence = self._retrieve_evidence(masking.masked_text) if masking.passed else []
             results.append(
                 self.prototype.analyze(

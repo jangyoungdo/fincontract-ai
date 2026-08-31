@@ -30,6 +30,7 @@ def _document_response(document: DocumentRecord) -> DocumentResponse:
 
 @router.post("/documents", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
 async def upload_document(file: UploadFile = File(...)) -> DocumentResponse:
+    """Validate and encrypt an uploaded document before persisting its metadata."""
     settings = get_settings()
     data = await file.read(settings.max_upload_bytes + 1)
     try:
@@ -62,6 +63,7 @@ async def upload_document(file: UploadFile = File(...)) -> DocumentResponse:
 
 @router.get("/documents/{document_id}", response_model=DocumentResponse)
 def get_document(document_id: str) -> DocumentResponse:
+    """Return non-content document metadata unless the record was deleted."""
     with get_session_factory()() as session:
         document = session.get(DocumentRecord, document_id)
         if not document or document.deleted_at:
@@ -71,6 +73,7 @@ def get_document(document_id: str) -> DocumentResponse:
 
 @router.delete("/documents/{document_id}", response_model=DeleteResponse)
 def delete_document(document_id: str) -> DeleteResponse:
+    """Delete encrypted bytes and tombstone metadata for an explicit user request."""
     with get_session_factory()() as session:
         document = session.get(DocumentRecord, document_id)
         if not document or document.deleted_at:
@@ -88,6 +91,7 @@ def delete_document(document_id: str) -> DeleteResponse:
 
 @router.post("/documents/{document_id}/analyses", response_model=AnalysisResponse, status_code=201)
 def create_analysis(document_id: str, request: AnalysisRequest, response: Response) -> AnalysisResponse:
+    """Create an analysis and run it synchronously or enqueue only its opaque ID."""
     analysis_id = str(uuid.uuid4())
     settings = get_settings()
     with get_session_factory()() as session:
@@ -155,6 +159,7 @@ def create_analysis(document_id: str, request: AnalysisRequest, response: Respon
 
 @router.get("/analyses/{analysis_id}", response_model=AnalysisResponse)
 def get_analysis(analysis_id: str) -> AnalysisResponse:
+    """Return persisted results plus short-lived Redis progress when enabled."""
     with get_session_factory()() as session:
         record = session.get(AnalysisRecord, analysis_id)
         if not record:
@@ -179,6 +184,7 @@ def get_analysis(analysis_id: str) -> AnalysisResponse:
 
 @router.get("/analyses/{analysis_id}/report")
 def get_report(analysis_id: str) -> dict:
+    """Expose the machine-readable review result with its legal-use disclaimer."""
     response = get_analysis(analysis_id)
     return {
         "analysis_id": response.id,
@@ -189,6 +195,7 @@ def get_report(analysis_id: str) -> dict:
 
 @router.get("/analyses/{analysis_id}/report.pdf")
 def get_pdf_report(analysis_id: str) -> StreamingResponse:
+    """Render a completed analysis as an audited, downloadable PDF report."""
     response = get_analysis(analysis_id)
     if response.status != "completed":
         raise HTTPException(status_code=409, detail="완료된 분석만 PDF 리포트를 생성할 수 있습니다.")

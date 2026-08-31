@@ -8,12 +8,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-
 DEFAULT_POLICY_PATH = Path(__file__).with_name("model_routing_v0_1.json")
 
 
 @dataclass(frozen=True)
 class RoutingContext:
+    """Inputs used to make a deterministic model-tier decision."""
     role: str
     risk_level: str = "medium"
     failed_attempts: int = 0
@@ -24,6 +24,7 @@ class RoutingContext:
 
 @dataclass(frozen=True)
 class ModelRoute:
+    """Resolved model choice and the budgets enforced for one LLM call."""
     policy_version: str
     role: str
     tier: str
@@ -35,6 +36,7 @@ class ModelRoute:
 
 
 class ModelRouter:
+    """Resolve versioned role policies without letting callers choose arbitrary models."""
     def __init__(
         self,
         policy_path: Path = DEFAULT_POLICY_PATH,
@@ -45,6 +47,7 @@ class ModelRouter:
         self.environment = environment if environment is not None else os.environ
 
     def route(self, context: RoutingContext) -> ModelRoute:
+        """Validate routing constraints and return the allowed model and budgets."""
         if context.role not in self.policy["roles"]:
             raise ValueError(f"Unknown LLM role: {context.role}")
         if context.risk_level not in {"low", "medium", "high"}:

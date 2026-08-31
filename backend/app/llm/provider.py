@@ -12,12 +12,18 @@ from app.config import get_settings
 
 
 class Provider(Protocol):
+    """Common assessment contract implemented by fake and external providers."""
     name: str
 
-    def assess(self, rule_signal: dict[str, Any], evidence: list[dict[str, Any]], model: str) -> dict[str, Any]: ...
+    def assess(
+        self, rule_signal: dict[str, Any], evidence: list[dict[str, Any]], model: str
+    ) -> dict[str, Any]:
+        """Return one schema-compatible assessment for masked, grounded input."""
+        ...
 
 
 class AssessmentOutput(BaseModel):
+    """Strict schema that prevents free-form provider output entering the pipeline."""
     risk_level: Literal["low", "medium", "high"]
     applicability: Literal["applicable", "not_applicable", "unknown"]
     summary: str = Field(min_length=1, max_length=1000)
@@ -28,11 +34,13 @@ class AssessmentOutput(BaseModel):
 
 
 class FakeProvider:
+    """Produce deterministic synthetic assessments for offline tests and demos."""
     # "fake" is the configuration value; retain "mock" in user-facing output
     # to make synthetic agent results unmistakable.
     name = "mock"
 
     def assess(self, rule_signal: dict[str, Any], evidence: list[dict[str, Any]], model: str) -> dict[str, Any]:
+        """Build a stable review-oriented assessment citing every supplied item."""
         return {
             "risk_level": "medium",
             "applicability": "unknown",
@@ -45,12 +53,14 @@ class FakeProvider:
 
 
 class AnthropicProvider:
+    """Call Claude with JSON-schema constrained output after explicit opt-in."""
     name = "anthropic"
 
     def __init__(self, api_key: str) -> None:
         self.client = Anthropic(api_key=api_key)
 
     def assess(self, rule_signal: dict[str, Any], evidence: list[dict[str, Any]], model: str) -> dict[str, Any]:
+        """Assess a masked rule signal using only the retrieved evidence supplied."""
         prompt = {
             "task": "Return a cautious Korean JSON assessment, never a legal conclusion.",
             "rule_signal": rule_signal,
@@ -73,6 +83,7 @@ class AnthropicProvider:
 
 
 def get_provider() -> Provider:
+    """Select a provider and fail closed unless every external-call guard is set."""
     settings = get_settings()
     if settings.llm_provider == "fake":
         return FakeProvider()

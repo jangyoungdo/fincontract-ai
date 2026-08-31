@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""Apply document and audit retention once or on a configured interval."""
 
 import argparse
 import time
@@ -7,6 +8,7 @@ from app.config import get_settings
 from app.services.retention import delete_expired_audit_events, delete_expired_documents
 
 if __name__ == "__main__":
+    # The same entrypoint serves both one-shot maintenance and the Compose loop.
     parser = argparse.ArgumentParser()
     parser.add_argument("--loop", action="store_true")
     args = parser.parse_args()

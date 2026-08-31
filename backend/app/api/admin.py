@@ -24,6 +24,7 @@ def list_audit_events(
     document_id: str | None = None,
     x_admin_token: str | None = Header(default=None),
 ) -> list[AuditEventResponse]:
+    """Return recent PII-free lifecycle events after constant-time token validation."""
     _require_admin_token(x_admin_token)
     query = select(AuditEvent).order_by(desc(AuditEvent.created_at)).limit(limit)
     if document_id:

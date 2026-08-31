@@ -14,6 +14,7 @@ from .audit import add_audit_event
 
 
 def delete_expired_documents(now: datetime | None = None) -> int:
+    """Delete expired encrypted files, tombstone metadata, and record each event."""
     cutoff = now or datetime.now(timezone.utc)
     deleted = 0
     with get_session_factory()() as session:
@@ -37,6 +38,7 @@ def delete_expired_documents(now: datetime | None = None) -> int:
 
 
 def delete_expired_audit_events(now: datetime | None = None) -> int:
+    """Remove audit rows older than the configured compliance retention window."""
     cutoff = (now or datetime.now(timezone.utc)) - timedelta(
         days=get_settings().audit_retention_days
     )

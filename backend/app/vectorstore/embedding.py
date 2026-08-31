@@ -4,12 +4,12 @@ import hashlib
 import math
 import re
 
-
 DIMENSION = 128
 TOKEN_PATTERN = re.compile(r"[가-힣A-Za-z0-9]+")
 
 
 def tokenize(text: str) -> list[str]:
+    """Normalize Korean, Latin, and numeric terms for offline retrieval."""
     return [token.lower() for token in TOKEN_PATTERN.findall(text)]
 
 

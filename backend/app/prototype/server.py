@@ -9,13 +9,11 @@ from pathlib import Path
 from typing import Any, Dict
 from urllib.parse import urlparse
 
-
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 REPO_ROOT = BACKEND_ROOT.parent
 sys.path.insert(0, str(BACKEND_ROOT))
 
 from app.prototype.pipeline import PrototypePipeline  # noqa: E402
-
 
 PIPELINE = PrototypePipeline()
 ANALYSES: Dict[str, Dict[str, Any]] = {}
@@ -23,7 +21,10 @@ UI_PATH = REPO_ROOT / "frontend" / "prototype" / "index.html"
 
 
 class PrototypeHandler(BaseHTTPRequestHandler):
+    """Serve the legacy zero-dependency demo without persisting source text."""
+
     def do_GET(self) -> None:  # noqa: N802
+        """Serve the prototype UI or retrieve one in-memory analysis."""
         path = urlparse(self.path).path
         if path in {"/", "/index.html"}:
             self._send(200, UI_PATH.read_bytes(), "text/html; charset=utf-8")
@@ -36,6 +37,7 @@ class PrototypeHandler(BaseHTTPRequestHandler):
         self._json(404, {"error": "NOT_FOUND"})
 
     def do_POST(self) -> None:  # noqa: N802
+        """Run an analysis or save a bounded human-review decision in memory."""
         path = urlparse(self.path).path
         try:
             payload = self._read_json()
@@ -65,6 +67,7 @@ class PrototypeHandler(BaseHTTPRequestHandler):
             self._json(400, {"error": "INVALID_REQUEST", "message": str(exc)})
 
     def log_message(self, format: str, *args: Any) -> None:
+        """Use standard access logging while keeping document bodies out of logs."""
         # Do not place document text in access logs.
         super().log_message(format, *args)
 
@@ -87,6 +90,7 @@ class PrototypeHandler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
+    """Start the legacy local-only prototype server."""
     server = ThreadingHTTPServer(("127.0.0.1", 8080), PrototypeHandler)
     print("FinContract AI prototype: http://127.0.0.1:8080")
     server.serve_forever()

@@ -5,6 +5,10 @@ import { Analysis, deleteDocument, reportPdfUrl, uploadAndAnalyze, waitForAnalys
 
 const stageLabels = ["문서 확인", "개인정보 보호", "위험 신호 탐색", "근거·결과 검토"];
 
+/**
+ * Own the complete non-technical review workflow: upload, queued progress,
+ * grounded findings, PDF export, and explicit source deletion.
+ */
 export function AnalysisWorkspace() {
   const [file, setFile] = useState<File | null>(null);
   const [arm, setArm] = useState<"A" | "D">("D");
@@ -13,6 +17,7 @@ export function AnalysisWorkspace() {
   const [error, setError] = useState("");
 
   async function submit(event: FormEvent) {
+    // Reset stale results before starting a new document lifecycle.
     event.preventDefault();
     if (!file) return;
     setBusy(true); setError(""); setAnalysis(null);
@@ -26,6 +31,7 @@ export function AnalysisWorkspace() {
   }
 
   async function remove() {
+    // Clear local state only after the backend confirms encrypted-file deletion.
     if (!analysis) return;
     await deleteDocument(analysis.document_id);
     setAnalysis(null); setFile(null);

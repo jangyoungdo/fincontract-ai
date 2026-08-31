@@ -155,6 +155,7 @@ Redis를 활성화한 환경에서는 `make run-worker`로 분석 ID만 전달�
 - [아키텍처 설명](docs/architecture.md)
 - [법률 판단 경계](docs/legal-boundary.md)
 - [데이터 거버넌스](docs/data-governance.md)
+- [코드 유지보수 가이드](docs/code-maintenance-guide.md)
 - [평가 기준](docs/evaluation.md)
 - [실험 운영 가이드](docs/experiments.md)
 - [에이전트 모델·토큰 라우팅](docs/model-routing.md)
