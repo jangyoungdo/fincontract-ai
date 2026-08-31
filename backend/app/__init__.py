@@ -1,0 +1,1 @@
+"""FinContract AI backend package."""

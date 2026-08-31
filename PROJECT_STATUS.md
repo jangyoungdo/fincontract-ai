@@ -2,7 +2,7 @@
 
 ## 현재 단계
 
-`준비 완료 — 구현 전 검증 게이트`
+`실험 001 진행 — 여신약관 3개 규칙 기준선`
 
 ## 확보된 산출물
 
@@ -14,6 +14,8 @@
 - `CONTRIBUTING.md`, `docs/git-workflow.md`: 2인 이상 협업과 worktree 운영 규칙
 - `.github/`: Pull Request 템플릿과 저장소 기본 검사
 - `scripts/setup-dev.sh`, `.githooks/pre-push`: 저장소별 협업 설정과 main 직접 push 방지
+- `experiments/001-rule-baseline/`: 첫 번째 버티컬 AI 비교 실험 명세
+- `backend/app/rules/`: 합성 데이터로 검증하는 3개 위험 신호 규칙 기준선
 
 ## 아직 확인되지 않은 사항
 
@@ -25,13 +27,11 @@
 
 ## 다음 구현 단계
 
-1. 환경 및 패키지 설정
-2. DB 모델과 API 스키마
-3. 파일 검증·추출·PII 마스킹
-4. YAML 규칙 엔진
-5. 리서치 manifest 검증과 ChromaDB 적재
-6. Claude provider와 grounding 검증
-7. 분석 API 및 frontend
-8. Docker·통합 테스트·평가
+1. 실험 001 규칙 엔진과 합성 스모크 평가 완료
+2. 첫 대상 공개 약관의 출처·라이선스 manifest 검증
+3. 규칙 작성 자료와 분리된 전문가 검토 평가셋 구축
+4. 실험 A 실제 기준선 측정
+5. 동일 출력 스키마의 실험 C(RAG + 단일 분석 에이전트) 구현
+6. A/C 비교 후 계획·검증 에이전트 도입 여부 결정
 
 구현 단계가 완료될 때마다 이 문서의 상태와 검증 결과를 갱신합니다.
