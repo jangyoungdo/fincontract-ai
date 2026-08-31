@@ -17,11 +17,16 @@ from .text_extraction import extract_text
 
 
 QUEUE_NAME = "fincontract:analysis:queue"
+DEAD_LETTER_QUEUE_NAME = "fincontract:analysis:dead-letter"
 PROGRESS_TTL_SECONDS = 60 * 60
 
 
 def progress_key(analysis_id: str) -> str:
     return f"fincontract:analysis:{analysis_id}:progress"
+
+
+def attempt_key(analysis_id: str) -> str:
+    return f"fincontract:analysis:{analysis_id}:attempts"
 
 
 def get_redis() -> Redis:
@@ -73,9 +78,21 @@ def process_analysis(analysis_id: str, redis_client: Redis | None = None) -> Non
             if redis_client:
                 set_progress(redis_client, analysis_id, "completed", 100)
         except Exception:
+            attempts = 1
+            if redis_client:
+                attempts = int(redis_client.incr(attempt_key(analysis_id)))
+                redis_client.expire(attempt_key(analysis_id), PROGRESS_TTL_SECONDS)
+            if redis_client and attempts < get_settings().worker_max_attempts:
+                record.status = "queued"
+                record.error_code = "ANALYSIS_RETRYING"
+                redis_client.rpush(QUEUE_NAME, analysis_id)
+                set_progress(redis_client, analysis_id, "retrying", 0)
+                session.commit()
+                return
             record.status = "failed"
             record.disposition = "needs_review"
             record.error_code = "ANALYSIS_FAILED"
             if redis_client:
+                redis_client.rpush(DEAD_LETTER_QUEUE_NAME, analysis_id)
                 set_progress(redis_client, analysis_id, "failed", 100)
         session.commit()
