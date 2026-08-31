@@ -28,6 +28,9 @@ jobs:
           test -x scripts/new-worktree.sh
           test -x .githooks/pre-push
 
+      - name: Run deterministic rule baseline tests
+        run: python -m unittest discover -s backend/tests -p 'test_*.py'
+
       - name: Check required project assets
         run: |
           test -f README.md
