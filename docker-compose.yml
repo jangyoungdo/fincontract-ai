@@ -63,6 +63,27 @@ services:
       timeout: 3s
       retries: 20
 
+  worker:
+    build: ./backend
+    command: ["python", "scripts/run_worker.py"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://fincontract:${POSTGRES_PASSWORD:-local-development-only}@postgres:5432/fincontract
+      CHROMA_MODE: http
+      CHROMA_HOST: chroma
+      CHROMA_PORT: 8000
+      USE_REDIS: "true"
+      REDIS_URL: redis://redis:6379/0
+      LLM_PROVIDER: fake
+      UPLOAD_DIR: /data/uploads
+      REPORT_DIR: /data/reports
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      chroma: {condition: service_healthy}
+    volumes:
+      - upload-data:/data/uploads
+      - report-data:/data/reports
+
   frontend:
     build:
       context: ./frontend

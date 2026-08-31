@@ -91,3 +91,10 @@ startxref
         analyzed = client.post(f"/api/v1/documents/{uploaded.json()['id']}/analyses", json={"experiment_arm": "A"})
     assert analyzed.status_code == 201, analyzed.text
     assert analyzed.json()["result"]["clause_count"] == 1
+
+
+def test_bank_comparison_fails_closed_without_a_verified_dataset() -> None:
+    with TestClient(app) as client:
+        response = client.get("/api/v1/bank-comparisons")
+    assert response.status_code == 503
+    assert "비교 데이터" in response.json()["detail"]

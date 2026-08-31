@@ -6,19 +6,19 @@
 |---|---|---:|---:|---|
 | Frontend | PDF 업로드 | implemented | TXT browser E2E verified | 실제 PDF browser E2E 추가 필요 |
 | Frontend | 분석 대시보드 | implemented | browser E2E, unit/build verified | mock 분석만 연결 |
-| Frontend | 원문 뷰어 | partial | build verified | 마스킹 조항만 표시 |
-| Frontend | 은행 비교 | pending | pending | 비교 데이터 미확보 |
+| Frontend | 원문 뷰어 | partial | build verified | 마스킹 조항만 표시, 전체 원문 미제공 |
+| Frontend | 은행 비교 | partial | API fail-closed + build verified | 검증된 비교 데이터 미확보로 결과 미제공 |
 | Backend | FastAPI Gateway | implemented | API integration verified | 동기식 분석 runner |
 | Backend | PDF/DOCX/TXT 처리 | implemented | TXT browser E2E, real PDF/DOCX API verified | 실제 PDF/DOCX browser E2E 추가 필요 |
 | Backend | PII 마스킹 | prototype | unit verified | 이름·주소 탐지 미완료 |
 | Backend | 조항 분리 | implemented | integration verified | 복잡한 표·OCR 제외 |
 | Backend | 위험도 판정 | prototype | 8-rule unit verified | 합성 데이터, 전문가 검토 미완료 |
 | Backend | LLM 분석 | implemented | fake-provider E2E, opt-in/fail-closed tests | 실제 Claude 키·연결 미검증 |
-| Backend | 리포트 생성 | partial | API integration verified | JSON 리포트만 제공 |
+| Backend | 리포트 생성 | partial | API integration verified | JSON 리포트만 제공, PDF/다운로드 미구현 |
 | RAG | 5개 컬렉션 | implemented | read/write verified | 실제 검증 코퍼스 없음 |
 | RAG | Hybrid Search | implemented | synthetic retrieval and analysis grounding verified | hashing vector는 데모 전용 |
-| Data | PostgreSQL | implemented | local process read/write verified | Alembic migration 필요 |
-| Data | Redis | implemented | local process read/write verified | worker 큐 미연결 |
+| Data | PostgreSQL | implemented | local process read/write + idempotent migration verified | Alembic 전환 여부 미결정 |
+| Data | Redis | implemented | local Redis worker E2E (`queued→completed`) verified | worker 운영 재시도·DLQ 미구현 |
 | Data | Data Pipeline | implemented | manifest/ingest/index verified | 합성 3건만 적재 |
 | Infra | Docker Compose | implemented | pending | Docker·Colima 미설치 |
 

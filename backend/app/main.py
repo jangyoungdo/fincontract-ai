@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.health import router as health_router
 from app.api.documents import router as documents_router
 from app.config import get_settings
-from app.models import Base, get_engine
+from app.models import get_engine, upgrade_database
 
 
 @asynccontextmanager
@@ -16,7 +16,7 @@ async def lifespan(_: FastAPI):
     settings = get_settings()
     settings.upload_dir.mkdir(parents=True, exist_ok=True)
     settings.report_dir.mkdir(parents=True, exist_ok=True)
-    Base.metadata.create_all(get_engine())
+    upgrade_database(get_engine())
     yield
 
 
