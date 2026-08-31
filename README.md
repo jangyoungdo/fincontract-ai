@@ -10,12 +10,12 @@
 
 ## 현재 상태
 
-- 프로젝트 스캐폴딩 프롬프트 v2 작성 완료
-- 시스템 아키텍처 이미지 v3 작성 완료
-- 모노레포 디렉터리와 데이터 거버넌스 시작 문서 준비 완료
-- 독립 Git 저장소와 worktree 기반 협업 규칙 준비 완료
-- 실제 애플리케이션 코드는 아직 구현하지 않음
-- 실험 001용 여신약관 3개 규칙 기준선과 합성 스모크 평가 구현
+- Next.js 업로드·분석 대시보드와 FastAPI 문서/분석/PDF 리포트 API 구현
+- PDF/DOCX/TXT 추출, PII 마스킹, 8개 규칙, RAG 선행 검색과 근거 검증 구현
+- PostgreSQL 메타데이터, Redis worker 재시도·격리, ChromaDB 5개 컬렉션 구현
+- Fernet 원문 암호화, 문서 TTL, 감사 로그·만료와 관리자 보호 조회 구현
+- fake provider 전체 흐름과 Claude structured output 라우팅을 분리하고 외부 전송은 opt-in으로 제한
+- 백엔드 45개 테스트와 프론트엔드 단위 테스트·프로덕션 빌드 검증
 - 리서치 통계 641건·16건은 근거 manifest 검증 전까지 후보 수로만 관리
 
 상세 상태와 다음 작업은 [PROJECT_STATUS.md](PROJECT_STATUS.md)를 참고하세요.
@@ -106,7 +106,7 @@ Infrastructure         Docker Compose · CI · 비밀정보 관리 · 관측성
 
 ## 기술 방향
 
-- Frontend: Next.js App Router, TypeScript, Tailwind CSS
+- Frontend: Next.js App Router, TypeScript, responsive CSS
 - Backend: Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2
 - Operational data: PostgreSQL
 - Retrieval: ChromaDB
