@@ -3,7 +3,7 @@ from pathlib import Path
 
 from docx import Document
 from fastapi.testclient import TestClient
-from pypdf import PdfReader
+from pypdf import PdfReader, PdfWriter
 
 from app.main import app
 from app.models import AuditEvent, DocumentRecord, get_session_factory
@@ -81,6 +81,33 @@ def test_real_docx_upload_extracts_and_analyzes_text() -> None:
     assert len(analyzed.json()["result"]["findings"]) == 1
 
 
+def test_docx_table_text_is_extracted_in_document_order() -> None:
+    stream = BytesIO()
+    document = Document()
+    table = document.add_table(rows=1, cols=2)
+    table.cell(0, 0).text = "변경 조항"
+    table.cell(0, 1).text = SAMPLE
+    document.save(stream)
+    with TestClient(app) as client:
+        uploaded = client.post(
+            "/api/v1/documents",
+            files={
+                "file": (
+                    "table-terms.docx",
+                    stream.getvalue(),
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                )
+            },
+        )
+        assert uploaded.status_code == 201, uploaded.text
+        analyzed = client.post(
+            f"/api/v1/documents/{uploaded.json()['id']}/analyses",
+            json={"experiment_arm": "A"},
+        )
+    assert analyzed.status_code == 201, analyzed.text
+    assert len(analyzed.json()["result"]["findings"]) == 1
+
+
 def test_real_pdf_upload_extracts_and_analyzes_text() -> None:
     # A compact, valid one-page PDF fixture with a literal text stream.
     pdf = b"""%PDF-1.4
@@ -110,6 +137,20 @@ startxref
         analyzed = client.post(f"/api/v1/documents/{uploaded.json()['id']}/analyses", json={"experiment_arm": "A"})
     assert analyzed.status_code == 201, analyzed.text
     assert analyzed.json()["result"]["clause_count"] == 1
+
+
+def test_scanned_pdf_fails_closed_with_ocr_required() -> None:
+    stream = BytesIO()
+    writer = PdfWriter()
+    writer.add_blank_page(width=612, height=792)
+    writer.write(stream)
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/documents",
+            files={"file": ("scan.pdf", stream.getvalue(), "application/pdf")},
+        )
+    assert response.status_code == 400
+    assert response.json()["detail"].startswith("OCR_REQUIRED:")
 
 
 def test_bank_comparison_fails_closed_without_a_verified_dataset() -> None:

@@ -1,0 +1,6 @@
+{"case_id":"contact","text":"이메일 test@example.com, 전화 010-1234-5678","expected_types":["email","phone"],"forbidden":["test@example.com","010-1234-5678"]}
+{"case_id":"identity","text":"주민번호 900101-1234567, 여권 M12345678, 면허 11-22-123456-78","expected_types":["resident_id","passport","driver_license"],"forbidden":["900101-1234567","M12345678","11-22-123456-78"]}
+{"case_id":"financial","text":"사업자 123-45-67890, 카드 1234-5678-9012-3456, 계좌 123-456-789012","expected_types":["business_registration","card","account_candidate"],"forbidden":["123-45-67890","1234-5678-9012-3456","123-456-789012"]}
+{"case_id":"contextual","text":"계약자는 홍길동이다. 주소는 서울특별시 종로구 세종대로 1.","expected_types":["name","address"],"forbidden":["홍길동","세종대로"]}
+{"case_id":"financial_terms_negative","text":"기준일은 2026-08-31이고 대출금은 100,000,000원, 금리는 연 3.5%이다.","expected_types":[],"forbidden":[]}
+{"case_id":"institution_negative","text":"계약자는 은행이고 은행 본점 소재지 법원을 관할법원으로 한다.","expected_types":[],"forbidden":[]}
