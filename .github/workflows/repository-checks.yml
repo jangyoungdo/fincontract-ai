@@ -1,0 +1,34 @@
+name: repository-checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  repository-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate JSON files
+        run: |
+          python -m json.tool research/manifest.schema.json >/dev/null
+          python -m json.tool research/research_manifest.example.json >/dev/null
+
+      - name: Check required project assets
+        run: |
+          test -f README.md
+          test -f assets/fincontract-ai-architecture-v3.png
+          test -f prompts/project_scaffolding_prompt_v2.md
+          test -f docs/architecture.md
+          test -f docs/git-workflow.md
+
+      - name: Prevent committed local secrets and user uploads
+        run: |
+          test ! -f .env
+          test -z "$(find storage/uploads -type f ! -name .gitkeep -print -quit)"
+

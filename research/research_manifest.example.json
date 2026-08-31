@@ -1,0 +1,12 @@
+{
+  "manifest_version": "0.1.0-example",
+  "generated_at": "2026-08-31T00:00:00Z",
+  "cutoff_date": "2026-08-31",
+  "status": "unverified",
+  "known_limitations": [
+    "후보 641건과 16건의 원본 및 집계 기준이 아직 연결되지 않음",
+    "라이선스와 재배포 가능 여부가 검토되지 않음"
+  ],
+  "datasets": []
+}
+

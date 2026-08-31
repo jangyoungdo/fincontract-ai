@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fincontract.local/schemas/research-manifest-v1.json",
+  "title": "FinContract AI research manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "manifest_version",
+    "generated_at",
+    "cutoff_date",
+    "status",
+    "datasets"
+  ],
+  "properties": {
+    "manifest_version": {"type": "string", "minLength": 1},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "cutoff_date": {"type": "string", "format": "date"},
+    "status": {"enum": ["unverified", "reviewing", "verified"]},
+    "known_limitations": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "datasets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "dataset_id",
+          "corpus_type",
+          "source_name",
+          "source_url",
+          "authority",
+          "collection_method",
+          "inclusion_criteria",
+          "exclusion_criteria",
+          "raw_count",
+          "deduplicated_count",
+          "accepted_count",
+          "rejected_count",
+          "deduplication_key",
+          "license_status",
+          "redistribution_allowed",
+          "review_status"
+        ],
+        "properties": {
+          "dataset_id": {"type": "string", "minLength": 1},
+          "corpus_type": {
+            "enum": [
+              "statutes",
+              "ftc_decisions",
+              "court_decisions",
+              "dispute_cases",
+              "clause_patterns"
+            ]
+          },
+          "source_name": {"type": "string", "minLength": 1},
+          "source_url": {"type": "string", "format": "uri"},
+          "authority": {"type": "string", "minLength": 1},
+          "collection_method": {"type": "string", "minLength": 1},
+          "inclusion_criteria": {"type": "array", "items": {"type": "string"}},
+          "exclusion_criteria": {"type": "array", "items": {"type": "string"}},
+          "raw_count": {"type": "integer", "minimum": 0},
+          "deduplicated_count": {"type": "integer", "minimum": 0},
+          "accepted_count": {"type": "integer", "minimum": 0},
+          "rejected_count": {"type": "integer", "minimum": 0},
+          "deduplication_key": {"type": "string", "minLength": 1},
+          "content_hash": {"type": "string"},
+          "license_status": {"enum": ["unknown", "reviewing", "approved", "restricted"]},
+          "redistribution_allowed": {"type": ["boolean", "null"]},
+          "review_status": {"enum": ["unverified", "reviewing", "verified", "rejected"]},
+          "reviewer": {"type": ["string", "null"]},
+          "known_limitations": {"type": "array", "items": {"type": "string"}},
+          "evaluation_exclusion": {"type": "boolean"}
+        }
+      }
+    }
+  }
+}
+
