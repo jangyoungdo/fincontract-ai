@@ -64,6 +64,10 @@ class ModelRoutingTest(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             ModelRouter(environment={}).route(RoutingContext(role="planner"))
 
+    def test_negative_usage_values_are_rejected(self) -> None:
+        with self.assertRaises(ValueError):
+            self.router.route(RoutingContext(role="planner", estimated_input_tokens=-1))
+
 
 if __name__ == "__main__":
     unittest.main()

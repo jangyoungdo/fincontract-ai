@@ -49,6 +49,8 @@ class ModelRouter:
             raise ValueError(f"Unknown LLM role: {context.role}")
         if context.risk_level not in {"low", "medium", "high"}:
             raise ValueError(f"Unknown risk level: {context.risk_level}")
+        if min(context.failed_attempts, context.estimated_input_tokens, context.deep_requests_today) < 0:
+            raise ValueError("Routing counters and token estimates cannot be negative")
         if context.role == "adjudicator" and not (
             context.risk_level == "high" and context.conflicting_evidence
         ):

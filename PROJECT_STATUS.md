@@ -2,7 +2,7 @@
 
 ## 현재 단계
 
-`실험 001 진행 — 여신약관 3개 규칙 기준선`
+`프로토타입 001 구현 — 오프라인 에이전트 파이프라인`
 
 ## 확보된 산출물
 
@@ -16,6 +16,8 @@
 - `scripts/setup-dev.sh`, `.githooks/pre-push`: 저장소별 협업 설정과 main 직접 push 방지
 - `experiments/001-rule-baseline/`: 첫 번째 버티컬 AI 비교 실험 명세
 - `backend/app/rules/`: 합성 데이터로 검증하는 3개 위험 신호 규칙 기준선
+- `backend/app/prototype/`: PII 마스킹부터 사람 검토까지 연결한 로컬 서버
+- `frontend/prototype/`: 비개발자용 단일 화면 프로토타입
 
 ## 아직 확인되지 않은 사항
 
