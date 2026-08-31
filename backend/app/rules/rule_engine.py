@@ -86,7 +86,8 @@ class RuleEngine:
 
     @staticmethod
     def _normalize(text: str) -> str:
-        return re.sub(r"\s+", " ", text).strip()
+        # Preserve string length so match spans still point to the masked source.
+        return re.sub(r"\s", " ", text)
 
     @staticmethod
     def _first_match(patterns: Iterable[str], text: str) -> Optional[re.Match[str]]:
