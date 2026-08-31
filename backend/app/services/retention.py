@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
-from app.models import DocumentRecord, get_session_factory
+from app.config import get_settings
+from app.models import AuditEvent, DocumentRecord, get_session_factory
 
 from .audit import add_audit_event
 
@@ -33,3 +34,13 @@ def delete_expired_documents(now: datetime | None = None) -> int:
             deleted += 1
         session.commit()
     return deleted
+
+
+def delete_expired_audit_events(now: datetime | None = None) -> int:
+    cutoff = (now or datetime.now(timezone.utc)) - timedelta(
+        days=get_settings().audit_retention_days
+    )
+    with get_session_factory()() as session:
+        result = session.execute(delete(AuditEvent).where(AuditEvent.created_at < cutoff))
+        session.commit()
+        return result.rowcount or 0

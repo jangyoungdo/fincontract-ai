@@ -3,7 +3,7 @@ from pathlib import Path
 
 from app.models import AuditEvent, DocumentRecord, get_session_factory
 from app.services.encrypted_storage import write_encrypted
-from app.services.retention import delete_expired_documents
+from app.services.retention import delete_expired_audit_events, delete_expired_documents
 
 
 def test_expired_encrypted_document_is_deleted_and_audited(tmp_path: Path) -> None:
@@ -33,3 +33,25 @@ def test_expired_encrypted_document_is_deleted_and_audited(tmp_path: Path) -> No
         assert session.query(AuditEvent).filter_by(
             document_id=document.id, event_type="document_expired"
         ).one()
+
+
+def test_expired_audit_events_are_deleted_without_removing_recent_events() -> None:
+    now = datetime.now(timezone.utc)
+    old_event = AuditEvent(
+        id="old-audit-event",
+        event_type="document_deleted",
+        created_at=now - timedelta(days=366),
+    )
+    recent_event = AuditEvent(
+        id="recent-audit-event",
+        event_type="document_uploaded",
+        created_at=now - timedelta(days=364),
+    )
+    with get_session_factory()() as session:
+        session.add_all([old_event, recent_event])
+        session.commit()
+
+    assert delete_expired_audit_events(now) == 1
+    with get_session_factory()() as session:
+        assert session.get(AuditEvent, old_event.id) is None
+        assert session.get(AuditEvent, recent_event.id) is not None
