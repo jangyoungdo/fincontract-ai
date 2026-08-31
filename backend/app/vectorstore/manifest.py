@@ -7,6 +7,7 @@ from jsonschema import Draft202012Validator, FormatChecker
 
 
 def validate_manifest(manifest_path: Path, schema_path: Path) -> dict:
+    """Require schema-valid, explicitly verified provenance before corpus ingestion."""
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
     errors = sorted(

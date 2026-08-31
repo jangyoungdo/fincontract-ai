@@ -25,10 +25,12 @@ export type Analysis = {
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://127.0.0.1:8000";
 
+/** Build the audited PDF endpoint without placing document content in the URL. */
 export function reportPdfUrl(analysisId: string): string {
   return `${API_BASE}/api/v1/analyses/${encodeURIComponent(analysisId)}/report.pdf`;
 }
 
+/** Upload one validated file, then create an analysis for the selected experiment arm. */
 export async function uploadAndAnalyze(file: File, arm: "A" | "D"): Promise<Analysis> {
   const form = new FormData();
   form.append("file", file);
@@ -44,6 +46,7 @@ export async function uploadAndAnalyze(file: File, arm: "A" | "D"): Promise<Anal
   return analyzed.json();
 }
 
+/** Poll queued work until it leaves the queue, with a bounded one-minute wait. */
 export async function waitForAnalysis(analysis: Analysis): Promise<Analysis> {
   let current = analysis;
   for (let attempt = 0; attempt < 60 && current.status === "queued"; attempt += 1) {
@@ -56,6 +59,7 @@ export async function waitForAnalysis(analysis: Analysis): Promise<Analysis> {
   return current;
 }
 
+/** Request encrypted-file deletion and metadata tombstoning for one document. */
 export async function deleteDocument(documentId: string): Promise<void> {
   const response = await fetch(`${API_BASE}/api/v1/documents/${documentId}`, { method: "DELETE" });
   if (!response.ok) throw new Error("삭제에 실패했습니다.");

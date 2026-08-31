@@ -8,6 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    """Load runtime policy and infrastructure settings from environment variables."""
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     app_env: str = "development"
@@ -40,4 +41,5 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
+    """Return one cached settings object so all services share the same policy."""
     return Settings()

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""Verify collection presence and a real hybrid-search result."""
 from __future__ import annotations
 
 import argparse
@@ -8,6 +9,7 @@ from app.vectorstore.client import COLLECTION_NAMES, ensure_collections, get_chr
 
 
 def main() -> int:
+    """Check all collections and return failure when retrieval yields no evidence."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--query", default="사업자가 계약 내용을 일방적으로 변경")
     args = parser.parse_args()

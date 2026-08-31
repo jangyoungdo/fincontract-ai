@@ -48,6 +48,7 @@ class PrototypePipeline:
         experiment_arm: str = "D",
         retrieved_evidence: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
+        """Run masking, rule screening, optional assessment, and citation verification."""
         if experiment_arm not in {"A", "D"}:
             raise ValueError("Prototype supports experiment arms A and D")
         if not text.strip():
@@ -58,6 +59,8 @@ class PrototypePipeline:
         started = time.perf_counter()
         created_at = datetime.now(timezone.utc).isoformat()
         analysis_id = str(uuid.uuid4())
+        # This is the outbound privacy gate: no rule, retrieval, or provider step
+        # receives the clause until supported identifiers have been removed.
         masking = mask_pii(text)
         if not masking.passed:
             return self._safe_failure(analysis_id, created_at, "PII_MASKING_FAILED")
@@ -83,6 +86,8 @@ class PrototypePipeline:
             verification = {"status": "not_run", "issues": [], "attempts": 0}
 
             if experiment_arm == "D":
+                # The provider sees the rule signal and retrieved evidence only;
+                # raw document bytes and unmasked text never cross this boundary.
                 route = self.router.route(
                     RoutingContext(
                         role="analyst",
@@ -127,6 +132,7 @@ class PrototypePipeline:
         elif experiment_arm == "A" or verified:
             disposition = "ready_for_review"
         else:
+            # Verification failures are never silently downgraded to a usable result.
             disposition = "needs_review"
 
         return {

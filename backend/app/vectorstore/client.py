@@ -6,7 +6,6 @@ import chromadb
 
 from app.config import get_settings
 
-
 COLLECTION_NAMES = (
     "statutes",
     "ftc_decisions",
@@ -18,6 +17,7 @@ COLLECTION_NAMES = (
 
 @lru_cache
 def get_chroma_client():
+    """Return a cached HTTP or persistent Chroma client for the configured mode."""
     settings = get_settings()
     if settings.chroma_mode == "http":
         return chromadb.HttpClient(host=settings.chroma_host, port=settings.chroma_port)
@@ -26,6 +26,7 @@ def get_chroma_client():
 
 
 def ensure_collections() -> list[str]:
+    """Idempotently create the five architecture-defined legal collections."""
     client = get_chroma_client()
     for name in COLLECTION_NAMES:
         client.get_or_create_collection(name=name, metadata={"hnsw:space": "cosine"})

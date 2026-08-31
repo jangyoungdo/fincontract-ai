@@ -6,6 +6,7 @@ from pathlib import Path
 
 @dataclass(frozen=True)
 class ValidatedFile:
+    """Canonical extension and MIME type accepted by the extraction layer."""
     extension: str
     mime_type: str
 
@@ -18,6 +19,7 @@ ALLOWED = {
 
 
 def validate_file(filename: str, content_type: str | None, data: bytes, max_bytes: int) -> ValidatedFile:
+    """Reject unsupported, oversized, empty, or signature-mismatched uploads."""
     extension = Path(filename).suffix.lower()
     if extension not in ALLOWED:
         raise ValueError("지원 형식은 TXT, PDF, DOCX입니다.")

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""Ingest provenance-verified research records into their Chroma collections."""
 from __future__ import annotations
 
 import argparse
@@ -9,7 +10,6 @@ from app.vectorstore.client import COLLECTION_NAMES, ensure_collections, get_chr
 from app.vectorstore.embedding import embed
 from app.vectorstore.manifest import validate_manifest
 
-
 REQUIRED_RECORD_FIELDS = {
     "document_id", "chunk_id", "corpus_type", "title", "authority", "source_url",
     "source_hash", "language", "section", "manifest_version", "review_status", "text",
@@ -17,6 +17,7 @@ REQUIRED_RECORD_FIELDS = {
 
 
 def main() -> int:
+    """Validate provenance, enforce stable IDs, and idempotently upsert records."""
     parser = argparse.ArgumentParser()
     parser.add_argument("manifest", type=Path)
     parser.add_argument("records", type=Path)
@@ -47,6 +48,7 @@ def main() -> int:
         metadata["embedding_model"] = "sha256-token-v1"
         metadata["embedding_dimension"] = 128
         metadata.setdefault("authority_weight", 0.5)
+        # Stable IDs plus source hashes make repeated ingestion deterministic.
         if existing["ids"]:
             previous_hash = existing["metadatas"][0]["source_hash"]
             if previous_hash == record["source_hash"]:

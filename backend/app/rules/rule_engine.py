@@ -13,12 +13,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
-
 DEFAULT_RULESET_PATH = Path(__file__).with_name("rules_v0_1.yaml")
 
 
 @dataclass(frozen=True)
 class RuleMatch:
+    """One reproducible review signal with a source span and version metadata."""
     rule_id: str
     rule_version: str
     category: str
@@ -30,6 +30,7 @@ class RuleMatch:
     legal_basis_candidates: List[str]
 
     def to_dict(self) -> Dict[str, Any]:
+        """Convert the immutable match to the API finding schema."""
         return {
             "rule_id": self.rule_id,
             "rule_version": self.rule_version,
@@ -43,6 +44,7 @@ class RuleMatch:
 
 
 class RuleEngine:
+    """Screen masked clauses with versioned deterministic review rules."""
     def __init__(self, ruleset_path: Path = DEFAULT_RULESET_PATH) -> None:
         with ruleset_path.open(encoding="utf-8") as ruleset_file:
             self.ruleset = json.load(ruleset_file)
@@ -50,6 +52,7 @@ class RuleEngine:
         self._rules = self.ruleset["rules"]
 
     def screen(self, clause_text: str, rule_ids: Optional[Iterable[str]] = None) -> List[RuleMatch]:
+        """Return matching risk signals without making a legal conclusion."""
         normalized = self._normalize(clause_text)
         selected = set(rule_ids) if rule_ids is not None else None
         matches: List[RuleMatch] = []

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""Validate research provenance before any record can enter retrieval storage."""
 from __future__ import annotations
 
 import argparse
@@ -8,6 +9,7 @@ from app.vectorstore.manifest import validate_manifest
 
 
 def main() -> int:
+    """Validate a manifest against the versioned JSON schema and review gate."""
     parser = argparse.ArgumentParser()
     parser.add_argument("manifest", type=Path)
     parser.add_argument("--schema", type=Path, default=Path("../research/manifest.schema.json"))

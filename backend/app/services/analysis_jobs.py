@@ -23,18 +23,22 @@ PROGRESS_TTL_SECONDS = 60 * 60
 
 
 def progress_key(analysis_id: str) -> str:
+    """Build the short-lived progress key for one opaque analysis identifier."""
     return f"fincontract:analysis:{analysis_id}:progress"
 
 
 def attempt_key(analysis_id: str) -> str:
+    """Build the retry-counter key without including document content."""
     return f"fincontract:analysis:{analysis_id}:attempts"
 
 
 def get_redis() -> Redis:
+    """Create a decoded Redis client from runtime configuration."""
     return Redis.from_url(get_settings().redis_url, decode_responses=True)
 
 
 def set_progress(redis_client: Redis, analysis_id: str, state: str, percent: int) -> None:
+    """Persist non-sensitive progress for one hour to avoid indefinite tracking."""
     payload = json.dumps(
         {"state": state, "percent": percent, "updated_at": datetime.now(timezone.utc).isoformat()},
         ensure_ascii=False,
@@ -43,11 +47,13 @@ def set_progress(redis_client: Redis, analysis_id: str, state: str, percent: int
 
 
 def get_progress(redis_client: Redis, analysis_id: str) -> dict[str, Any] | None:
+    """Read the current progress snapshot when it has not expired."""
     raw = redis_client.get(progress_key(analysis_id))
     return json.loads(raw) if raw else None
 
 
 def enqueue_analysis(redis_client: Redis, analysis_id: str) -> None:
+    """Queue only an analysis ID; document bytes remain in encrypted storage."""
     set_progress(redis_client, analysis_id, "queued", 0)
     redis_client.rpush(QUEUE_NAME, analysis_id)
 
@@ -85,6 +91,8 @@ def process_analysis(analysis_id: str, redis_client: Redis | None = None) -> Non
             if redis_client:
                 set_progress(redis_client, analysis_id, "completed", 100)
         except Exception:
+            # Retrying reuses the persisted analysis ID. Once the configured limit
+            # is reached, the job is isolated in the DLQ and requires human review.
             attempts = 1
             if redis_client:
                 attempts = int(redis_client.incr(attempt_key(analysis_id)))

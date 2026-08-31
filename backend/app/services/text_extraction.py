@@ -7,6 +7,7 @@ from pypdf import PdfReader
 
 
 def extract_text(data: bytes, extension: str, max_characters: int = 200_000) -> str:
+    """Extract bounded text from validated TXT, PDF, or DOCX bytes in memory."""
     if extension == ".txt":
         text = data.decode("utf-8")
     elif extension == ".pdf":

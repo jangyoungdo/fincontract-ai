@@ -5,7 +5,6 @@ import logging
 
 from app.services.analysis_jobs import QUEUE_NAME, get_redis, process_analysis
 
-
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     logger = logging.getLogger("fincontract.worker")

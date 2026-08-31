@@ -14,6 +14,7 @@ from app.models import get_engine, upgrade_database
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    """Prepare writable storage and idempotently upgrade the database on startup."""
     settings = get_settings()
     settings.upload_dir.mkdir(parents=True, exist_ok=True)
     settings.report_dir.mkdir(parents=True, exist_ok=True)
@@ -23,6 +24,8 @@ async def lifespan(_: FastAPI):
 
 settings = get_settings()
 app = FastAPI(title="FinContract AI", version="0.1.0", lifespan=lifespan)
+# Only the configured frontend may call the browser-facing API; admin access
+# additionally requires X-Admin-Token at the endpoint boundary.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[settings.frontend_origin],

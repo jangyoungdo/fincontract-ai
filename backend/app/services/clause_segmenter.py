@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Clause:
+    """A source-aligned clause segment used to map findings back to the document."""
     number: int
     text: str
     char_start: int
@@ -16,6 +17,7 @@ CLAUSE_HEADING = re.compile(r"(?m)(?=^\s*(?:제\s*\d+\s*조|\d+[.)])\s*)")
 
 
 def segment_clauses(text: str) -> list[Clause]:
+    """Split common Korean article headings while retaining absolute character spans."""
     starts = [match.start() for match in CLAUSE_HEADING.finditer(text)]
     if not starts:
         return [Clause(1, text, 0, len(text))]

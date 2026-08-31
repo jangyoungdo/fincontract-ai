@@ -35,6 +35,7 @@ def _draw_footer(canvas: Canvas, document: SimpleDocTemplate) -> None:
 
 
 def build_pdf_report(analysis_id: str, result: dict | None) -> bytes:
+    """Render a self-contained Korean review report without embedding source files."""
     pdfmetrics.registerFont(UnicodeCIDFont(FONT_NAME))
     buffer = BytesIO()
     document = SimpleDocTemplate(

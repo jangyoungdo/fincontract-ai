@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""Verify live database, vector-store, and optional Redis read/write paths."""
 from __future__ import annotations
 
 from redis import Redis
@@ -10,6 +11,7 @@ from app.vectorstore.client import COLLECTION_NAMES, ensure_collections, get_chr
 
 
 def main() -> int:
+    """Run reversible smoke writes against every configured infrastructure service."""
     settings = get_settings()
     engine = get_engine()
     assert upgrade_database(engine) in {"upgraded", "already_current"}

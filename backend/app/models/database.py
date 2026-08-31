@@ -10,10 +10,12 @@ from app.config import get_settings
 
 
 class Base(DeclarativeBase):
+    """Declarative root for all persisted FinContract records."""
     pass
 
 
 class DocumentRecord(Base):
+    """Store document metadata and an encrypted-file pointer, never plaintext bytes."""
     __tablename__ = "documents"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
@@ -31,6 +33,7 @@ class DocumentRecord(Base):
 
 
 class AnalysisRecord(Base):
+    """Track one analysis lifecycle and its privacy-filtered JSON result."""
     __tablename__ = "analyses"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
@@ -47,6 +50,7 @@ class AnalysisRecord(Base):
 
 
 class AuditEvent(Base):
+    """Record PII-free lifecycle events for operations and retention review."""
     __tablename__ = "audit_events"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
@@ -60,6 +64,7 @@ class AuditEvent(Base):
 
 @lru_cache
 def get_engine():
+    """Create and cache the SQLAlchemy engine for the configured database."""
     settings = get_settings()
     connect_args = {"check_same_thread": False} if settings.database_url.startswith("sqlite") else {}
     return create_engine(settings.database_url, pool_pre_ping=True, connect_args=connect_args)
@@ -67,4 +72,5 @@ def get_engine():
 
 @lru_cache
 def get_session_factory():
+    """Return a cached session factory bound to the shared database engine."""
     return sessionmaker(bind=get_engine(), expire_on_commit=False)

@@ -12,6 +12,7 @@ from app.config import get_settings
 
 @lru_cache
 def get_fernet() -> Fernet:
+    """Validate the deployment key once and return the shared Fernet cipher."""
     key = get_settings().document_encryption_key
     if not key:
         raise RuntimeError("DOCUMENT_ENCRYPTION_KEY is required")
@@ -22,11 +23,13 @@ def get_fernet() -> Fernet:
 
 
 def write_encrypted(path: Path, data: bytes) -> None:
+    """Encrypt document bytes before the first write to persistent storage."""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(get_fernet().encrypt(data))
 
 
 def read_encrypted(path: Path) -> bytes:
+    """Decrypt bytes and surface authentication failures as safe domain errors."""
     try:
         return get_fernet().decrypt(path.read_bytes())
     except InvalidToken as exc:

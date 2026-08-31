@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 
 class DocumentResponse(BaseModel):
+    """Public document metadata returned without storage paths or extracted text."""
     id: str
     original_filename: str
     mime_type: str
@@ -18,10 +19,12 @@ class DocumentResponse(BaseModel):
 
 
 class AnalysisRequest(BaseModel):
+    """Select the reproducible experiment arm for a new analysis."""
     experiment_arm: Literal["A", "D"] = "D"
 
 
 class AnalysisResponse(BaseModel):
+    """Stable API envelope for synchronous and queued analysis states."""
     id: str
     document_id: str
     status: str
@@ -33,11 +36,13 @@ class AnalysisResponse(BaseModel):
 
 
 class DeleteResponse(BaseModel):
+    """Confirm that a document was tombstoned and its encrypted file removed."""
     id: str
     status: Literal["deleted"]
 
 
 class AuditEventResponse(BaseModel):
+    """PII-free administrative audit representation."""
     id: str
     event_type: str
     document_id: str | None
