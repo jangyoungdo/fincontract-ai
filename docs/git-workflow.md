@@ -14,6 +14,22 @@ fincontract-worktrees/
 
 main checkout은 동기화와 worktree 관리에만 사용하고 기능 구현은 하지 않습니다.
 
+## 최초 1회 로컬 설정
+
+각 개발자는 clone 직후 아래 명령을 실행합니다.
+
+```bash
+./scripts/setup-dev.sh
+```
+
+이 설정은 현재 저장소에만 적용되며 다음을 보장합니다.
+
+- `git pull`은 fast-forward만 허용
+- 삭제된 원격 브랜치를 fetch 시 정리
+- 반복 충돌 해결 기록 재사용
+- 새 브랜치의 upstream 자동 설정
+- `.githooks/pre-push`를 활성화해 `main` 직접 push 차단
+
 ## 새 작업 시작
 
 ```bash
@@ -64,6 +80,8 @@ GitHub `main` 브랜치에 다음 보호 규칙을 권장합니다.
 
 GitHub Free 개인 비공개 저장소에서 일부 규칙을 지원하지 않으면 팀 규칙과 PR 체크리스트로 동일한 절차를 유지합니다.
 
+로컬 pre-push hook은 실수 방지 장치일 뿐 원격 보호 규칙의 대체물이 아닙니다. 저장소 관리자는 GitHub에서 branch protection 또는 repository ruleset을 별도로 활성화해야 합니다.
+
 ## worktree 종료
 
 PR 병합 후 main checkout에서 실행합니다.
@@ -78,4 +96,3 @@ git worktree prune
 ```
 
 미커밋 변경이 있는 worktree는 강제로 삭제하지 않습니다.
-

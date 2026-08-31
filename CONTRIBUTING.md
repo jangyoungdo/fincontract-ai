@@ -7,6 +7,7 @@ git clone <repository-url> fincontract-ai
 cd fincontract-ai
 git switch main
 git pull --ff-only
+./scripts/setup-dev.sh
 ```
 
 공유 개발에서는 같은 디렉터리에서 브랜치를 바꾸지 말고 작업별 worktree를 사용합니다.
@@ -16,6 +17,8 @@ git pull --ff-only
 ```
 
 자세한 내용은 [Git 협업 및 worktree 운영](docs/git-workflow.md)을 참고하세요.
+
+`setup-dev.sh`는 이 저장소에만 fast-forward pull, 원격 정리, conflict resolution 재사용과 versioned Git hook을 설정합니다. 전역 Git 설정은 변경하지 않습니다.
 
 ## 2. 브랜치 이름
 
@@ -59,4 +62,3 @@ git worktree remove ../fincontract-worktrees/api-foundation
 git branch -d feature/api-foundation
 git worktree prune
 ```
-

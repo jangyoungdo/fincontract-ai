@@ -13,6 +13,7 @@
 - `backend/`, `frontend/`: 구현 대상 모노레포 구조
 - `CONTRIBUTING.md`, `docs/git-workflow.md`: 2인 이상 협업과 worktree 운영 규칙
 - `.github/`: Pull Request 템플릿과 저장소 기본 검사
+- `scripts/setup-dev.sh`, `.githooks/pre-push`: 저장소별 협업 설정과 main 직접 push 방지
 
 ## 아직 확인되지 않은 사항
 

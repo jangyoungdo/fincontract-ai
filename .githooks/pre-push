@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  if [[ "$remote_ref" == "refs/heads/main" ]]; then
+    echo "Direct pushes to main are blocked by the FinContract AI collaboration policy." >&2
+    echo "Push a feature branch and merge it through a reviewed Pull Request." >&2
+    exit 1
+  fi
+done
+
+exit 0
