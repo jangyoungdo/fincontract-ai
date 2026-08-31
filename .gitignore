@@ -14,6 +14,8 @@ node_modules/
 *.tsbuildinfo
 coverage/
 playwright-report/
+output/
+tmp/
 
 storage/uploads/*
 storage/reports/*
