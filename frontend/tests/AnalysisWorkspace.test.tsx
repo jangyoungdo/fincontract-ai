@@ -40,7 +40,31 @@ describe("AnalysisWorkspace", () => {
           status: "completed",
           disposition: "no_signal",
           experiment_arm: "D",
-          result: { findings: [], warnings: [], clause_count: 1 },
+          result: {
+            findings: [
+              {
+                finding_id: "finding-1",
+                source: { masked_text: "은행은 일방적으로 변경한다.", match_span: [4, 9] },
+                rule_signal: {
+                  rule_id: "rule-1",
+                  category: "일방 변경",
+                  matched_excerpt: "일방적으로",
+                  signal_strength: "medium",
+                  rationale: "검토 필요",
+                },
+                evidence: [],
+                verification: { status: "passed" },
+                clause: { number: 1, char_start: 0, char_end: 15 },
+              },
+            ],
+            warnings: [],
+            clause_count: 1,
+            document: {
+              masked_text: "은행은 일방적으로 변경한다.",
+              pii_types: [],
+              pii_replacement_count: 0,
+            },
+          },
         }),
       });
     vi.stubGlobal("fetch", fetchMock);
@@ -60,6 +84,8 @@ describe("AnalysisWorkspace", () => {
       "http://127.0.0.1:8000/api/v1/analyses/analysis-1/report.pdf",
     );
     expect(report).toHaveAttribute("download");
+    expect(screen.getByRole("heading", { name: "마스킹된 전체 문서" })).toBeInTheDocument();
+    expect(screen.getByText("일방적으로", { selector: "mark" })).toBeInTheDocument();
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
   });
 });

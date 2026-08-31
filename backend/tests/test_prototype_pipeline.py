@@ -87,6 +87,20 @@ class PrototypePipelineTest(unittest.TestCase):
         self.assertNotIn("홍길동", masked.masked_text)
         self.assertNotIn("세종대로", masked.masked_text)
 
+    def test_masking_detects_contextual_identity_and_extended_identifiers(self) -> None:
+        source = (
+            "계약자는 홍길동이고 주소는 서울특별시 종로구 세종대로 1. "
+            "여권 M12345678, 운전면허 11-22-123456-78, 사업자 123-45-67890"
+        )
+        masked = mask_pii(source)
+        self.assertTrue(masked.passed)
+        self.assertEqual(
+            {"name", "address", "passport", "driver_license", "business_registration"},
+            set(masked.detected_types),
+        )
+        for sensitive in ("홍길동", "세종대로", "M12345678", "11-22-123456-78", "123-45-67890"):
+            self.assertNotIn(sensitive, masked.masked_text)
+
     def test_masking_does_not_treat_legal_venue_as_personal_address(self) -> None:
         text = "은행 본점 소재지 법원을 전속적 관할법원으로 한다."
         self.assertEqual(text, mask_pii(text).masked_text)

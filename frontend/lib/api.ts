@@ -11,6 +11,7 @@ export type Finding = {
   evidence: Array<{ evidence_id: string; title: string; status: string; authority: string }>;
   assessment?: { summary: string; counter_considerations: string[]; review_questions: string[] };
   verification: { status: string };
+  clause?: { number: number; char_start: number; char_end: number };
 };
 
 export type Analysis = {
@@ -19,7 +20,12 @@ export type Analysis = {
   status: string;
   disposition: string;
   experiment_arm: string;
-  result?: { findings: Finding[]; warnings: string[]; clause_count: number };
+  result?: {
+    findings: Finding[];
+    warnings: string[];
+    clause_count: number;
+    document?: { masked_text: string; pii_types: string[]; pii_replacement_count: number };
+  };
   progress?: { state: string; percent: number };
 };
 

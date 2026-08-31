@@ -15,12 +15,30 @@ class DocumentAnalysisPipeline:
 
     def run(self, text: str, experiment_arm: str) -> dict:
         """Analyze each clause and preserve the strictest downstream disposition."""
-        clauses = segment_clauses(text)
+        document_masking = mask_pii(text)
+        if not document_masking.passed:
+            return {
+                "status": "completed",
+                "disposition": "needs_review",
+                "clause_count": 0,
+                "findings": [],
+                "warnings": ["개인정보 마스킹 검증에 실패해 분석을 중단했습니다."],
+                "document": {
+                    "masked_text": "",
+                    "pii_types": document_masking.detected_types,
+                    "pii_replacement_count": document_masking.replacement_count,
+                },
+                "usage": {"calls": []},
+                "experiment": {"arm": experiment_arm, "provider": "none"},
+            }
+
+        # Segment the already-masked document so all downstream offsets point to
+        # the same privacy-safe text returned by the source viewer.
+        clauses = segment_clauses(document_masking.masked_text)
         results = []
         for clause in clauses:
-            masking = mask_pii(clause.text)
             # Retrieval happens before provider assessment and receives masked text only.
-            evidence = self._retrieve_evidence(masking.masked_text) if masking.passed else []
+            evidence = self._retrieve_evidence(clause.text)
             results.append(
                 self.prototype.analyze(
                     clause.text,
@@ -54,6 +72,11 @@ class DocumentAnalysisPipeline:
             "clause_count": len(clauses),
             "findings": findings,
             "warnings": sorted(warnings),
+            "document": {
+                "masked_text": document_masking.masked_text,
+                "pii_types": document_masking.detected_types,
+                "pii_replacement_count": document_masking.replacement_count,
+            },
             "usage": {"calls": usage_calls},
             "experiment": {
                 "arm": experiment_arm,
