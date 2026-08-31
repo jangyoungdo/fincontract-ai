@@ -1,4 +1,4 @@
-.PHONY: setup-backend setup-frontend test-backend test-frontend frontend-check api-check e2e migrate retention run-worker run-backend run-frontend infra-check ingest-demo verify-index
+.PHONY: setup-backend setup-frontend test-backend test-frontend frontend-check api-check e2e failure-e2e migrate retention run-worker run-backend run-frontend infra-check ingest-demo verify-index
 
 PYTHON := backend/.venv/bin/python
 
@@ -21,6 +21,9 @@ api-check:
 	cd backend && .venv/bin/pytest tests/test_documents_api.py tests/test_health.py
 
 e2e: api-check
+
+failure-e2e:
+	cd backend && .venv/bin/python scripts/check_worker_failure.py
 
 migrate:
 	cd backend && .venv/bin/python scripts/migrate.py
