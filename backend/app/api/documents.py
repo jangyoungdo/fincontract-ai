@@ -4,9 +4,11 @@ import hashlib
 import json
 import uuid
 from datetime import datetime, timedelta, timezone
+from io import BytesIO
 from pathlib import Path
 
 from fastapi import APIRouter, File, HTTPException, Response, UploadFile, status
+from fastapi.responses import StreamingResponse
 
 from app.config import get_settings
 from app.models import AnalysisRecord, DocumentRecord, get_session_factory
@@ -16,6 +18,7 @@ from app.services.analysis_pipeline import DocumentAnalysisPipeline
 from app.services.audit import add_audit_event
 from app.services.encrypted_storage import read_encrypted, write_encrypted
 from app.services.file_validation import validate_file
+from app.services.pdf_report import build_pdf_report
 from app.services.text_extraction import extract_text
 
 router = APIRouter(prefix="/api/v1", tags=["documents"])
@@ -182,6 +185,27 @@ def get_report(analysis_id: str) -> dict:
         "disclaimer": "법률 판단이 아닌 검토 보조 자료입니다.",
         "result": response.result,
     }
+
+
+@router.get("/analyses/{analysis_id}/report.pdf")
+def get_pdf_report(analysis_id: str) -> StreamingResponse:
+    response = get_analysis(analysis_id)
+    if response.status != "completed":
+        raise HTTPException(status_code=409, detail="완료된 분석만 PDF 리포트를 생성할 수 있습니다.")
+    payload = build_pdf_report(response.id, response.result)
+    with get_session_factory()() as session:
+        add_audit_event(
+            session,
+            "report_generated",
+            document_id=response.document_id,
+            analysis_id=response.id,
+        )
+        session.commit()
+    return StreamingResponse(
+        BytesIO(payload),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="fincontract-{analysis_id}.pdf"'},
+    )
 
 
 @router.get("/bank-comparisons")

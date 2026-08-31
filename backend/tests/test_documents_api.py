@@ -3,6 +3,7 @@ from pathlib import Path
 
 from docx import Document
 from fastapi.testclient import TestClient
+from pypdf import PdfReader
 
 from app.main import app
 from app.models import AuditEvent, DocumentRecord, get_session_factory
@@ -37,6 +38,12 @@ def test_txt_upload_analysis_report_and_delete() -> None:
         assert report.status_code == 200
         assert "법률 판단이 아닌" in report.json()["disclaimer"]
 
+        pdf_report = client.get(f"/api/v1/analyses/{body['id']}/report.pdf")
+        assert pdf_report.status_code == 200
+        assert pdf_report.headers["content-type"] == "application/pdf"
+        reader = PdfReader(BytesIO(pdf_report.content))
+        assert len(reader.pages) >= 1
+
         deleted = client.delete(f"/api/v1/documents/{document_id}")
         assert deleted.status_code == 200
         assert deleted.json()["status"] == "deleted"
@@ -45,7 +52,7 @@ def test_txt_upload_analysis_report_and_delete() -> None:
                 event.event_type
                 for event in session.query(AuditEvent).filter(AuditEvent.document_id == document_id)
             }
-        assert {"document_uploaded", "analysis_created", "analysis_completed", "document_deleted"}.issubset(event_types)
+        assert {"document_uploaded", "analysis_created", "analysis_completed", "report_generated", "document_deleted"}.issubset(event_types)
 
 
 def test_rejects_spoofed_pdf() -> None:
