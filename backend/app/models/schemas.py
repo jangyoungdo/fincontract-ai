@@ -29,6 +29,7 @@ class AnalysisResponse(BaseModel):
     experiment_arm: str
     result: dict[str, Any] | None = None
     error_code: str | None = None
+    progress: dict[str, Any] | None = None
 
 
 class DeleteResponse(BaseModel):

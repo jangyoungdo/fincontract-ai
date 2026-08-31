@@ -5,14 +5,14 @@ from redis import Redis
 from sqlalchemy import text
 
 from app.config import get_settings
-from app.models import Base, get_engine
+from app.models import get_engine, upgrade_database
 from app.vectorstore.client import COLLECTION_NAMES, ensure_collections, get_chroma_client
 
 
 def main() -> int:
     settings = get_settings()
     engine = get_engine()
-    Base.metadata.create_all(engine)
+    assert upgrade_database(engine) in {"upgraded", "already_current"}
     with engine.begin() as connection:
         assert connection.execute(text("SELECT 1")).scalar_one() == 1
     print("database: read/write connection ready")

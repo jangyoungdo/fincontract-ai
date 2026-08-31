@@ -126,6 +126,7 @@ make ingest-demo
 make verify-index
 make frontend-check
 make e2e
+make migrate
 ```
 
 개발 서버는 두 터미널에서 실행합니다.
@@ -142,6 +143,8 @@ Docker 런타임이 준비된 경우 다음 명령으로 PostgreSQL, Redis, Chro
 ```bash
 docker compose up --build
 ```
+
+Redis를 활성화한 환경에서는 `make run-worker`로 분석 ID만 전달하는 worker를 별도 실행합니다. 진행 상태는 Redis에 한 시간만 보관하며 원문이나 추출 텍스트는 큐에 넣지 않습니다.
 
 ## 주요 문서
 

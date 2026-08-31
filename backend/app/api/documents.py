@@ -6,13 +6,14 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, File, HTTPException, Response, UploadFile, status
 from sqlalchemy import select
 
 from app.config import get_settings
 from app.models import AnalysisRecord, DocumentRecord, get_session_factory
 from app.models.schemas import AnalysisRequest, AnalysisResponse, DeleteResponse, DocumentResponse
 from app.services.analysis_pipeline import DocumentAnalysisPipeline
+from app.services.analysis_jobs import enqueue_analysis, get_progress, get_redis
 from app.services.file_validation import validate_file
 from app.services.text_extraction import extract_text
 
@@ -82,8 +83,9 @@ def delete_document(document_id: str) -> DeleteResponse:
 
 
 @router.post("/documents/{document_id}/analyses", response_model=AnalysisResponse, status_code=201)
-def create_analysis(document_id: str, request: AnalysisRequest) -> AnalysisResponse:
+def create_analysis(document_id: str, request: AnalysisRequest, response: Response) -> AnalysisResponse:
     analysis_id = str(uuid.uuid4())
+    settings = get_settings()
     with get_session_factory()() as session:
         document = session.get(DocumentRecord, document_id)
         if not document or document.deleted_at:
@@ -94,12 +96,28 @@ def create_analysis(document_id: str, request: AnalysisRequest) -> AnalysisRespo
         record = AnalysisRecord(
             id=analysis_id,
             document_id=document_id,
-            status="analyzing",
+            status="queued" if settings.use_redis else "analyzing",
             disposition="pending",
             experiment_arm=request.experiment_arm,
         )
         session.add(record)
         session.flush()
+        if settings.use_redis:
+            try:
+                enqueue_analysis(get_redis(), analysis_id)
+            except Exception as exc:
+                session.rollback()
+                raise HTTPException(status_code=503, detail="분석 큐를 사용할 수 없습니다.") from exc
+            session.commit()
+            response.status_code = status.HTTP_202_ACCEPTED
+            return AnalysisResponse(
+                id=record.id,
+                document_id=record.document_id,
+                status=record.status,
+                disposition=record.disposition,
+                experiment_arm=record.experiment_arm,
+                progress={"state": "queued", "percent": 0},
+            )
         try:
             result = DocumentAnalysisPipeline().run(text, request.experiment_arm)
             record.status = "completed"
@@ -128,6 +146,12 @@ def get_analysis(analysis_id: str) -> AnalysisResponse:
         record = session.get(AnalysisRecord, analysis_id)
         if not record:
             raise HTTPException(status_code=404, detail="분석을 찾을 수 없습니다.")
+        progress = None
+        if get_settings().use_redis:
+            try:
+                progress = get_progress(get_redis(), analysis_id)
+            except Exception:
+                progress = {"state": "unavailable", "percent": 0}
         return AnalysisResponse(
             id=record.id,
             document_id=record.document_id,
@@ -136,6 +160,7 @@ def get_analysis(analysis_id: str) -> AnalysisResponse:
             experiment_arm=record.experiment_arm,
             result=json.loads(record.result_json) if record.result_json else None,
             error_code=record.error_code,
+            progress=progress,
         )
 
 
@@ -147,3 +172,12 @@ def get_report(analysis_id: str) -> dict:
         "disclaimer": "법률 판단이 아닌 검토 보조 자료입니다.",
         "result": response.result,
     }
+
+
+@router.get("/bank-comparisons")
+def get_bank_comparisons() -> dict:
+    """Fail closed until a licensed, versioned comparison dataset is available."""
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="검증된 공개·허가 은행 비교 데이터가 아직 없어 비교 결과를 제공하지 않습니다.",
+    )

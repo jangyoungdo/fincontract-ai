@@ -4,6 +4,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 WORKDIR /app
 COPY pyproject.toml ./
 COPY app ./app
+COPY scripts ./scripts
 RUN pip install --no-cache-dir .
 RUN useradd --create-home --uid 10001 fincontract && mkdir -p /data/uploads /data/reports /data/chroma && chown -R fincontract:fincontract /data
 USER fincontract
