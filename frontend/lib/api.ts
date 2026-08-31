@@ -25,6 +25,10 @@ export type Analysis = {
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://127.0.0.1:8000";
 
+export function reportPdfUrl(analysisId: string): string {
+  return `${API_BASE}/api/v1/analyses/${encodeURIComponent(analysisId)}/report.pdf`;
+}
+
 export async function uploadAndAnalyze(file: File, arm: "A" | "D"): Promise<Analysis> {
   const form = new FormData();
   form.append("file", file);
