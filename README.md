@@ -127,7 +127,10 @@ make verify-index
 make frontend-check
 make e2e
 make migrate
+make retention
 ```
+
+원문 저장에는 `DOCUMENT_ENCRYPTION_KEY`가 반드시 필요합니다. 키는 `.env` 또는 배포 비밀 저장소에만 두고 저장소에 커밋하지 않습니다. `make retention`은 만료 문서를 한 번 정리하며, Compose의 retention 서비스는 이를 주기적으로 실행합니다.
 
 개발 서버는 두 터미널에서 실행합니다.
 

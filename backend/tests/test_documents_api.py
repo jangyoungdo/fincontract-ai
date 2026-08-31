@@ -1,11 +1,11 @@
 from io import BytesIO
 from pathlib import Path
 
-from fastapi.testclient import TestClient
 from docx import Document
+from fastapi.testclient import TestClient
 
 from app.main import app
-
+from app.models import AuditEvent, DocumentRecord, get_session_factory
 
 SAMPLE = "제1조 은행은 필요하다고 인정하는 경우 서비스 내용을 일방적으로 변경할 수 있다."
 
@@ -18,6 +18,12 @@ def test_txt_upload_analysis_report_and_delete() -> None:
         )
         assert uploaded.status_code == 201, uploaded.text
         document_id = uploaded.json()["id"]
+        with get_session_factory()() as session:
+            stored = session.get(DocumentRecord, document_id)
+            assert stored is not None
+            encrypted = Path(stored.storage_path).read_bytes()
+            assert SAMPLE.encode() not in encrypted
+            assert stored.storage_path.endswith(".txt.enc")
 
         analyzed = client.post(
             f"/api/v1/documents/{document_id}/analyses", json={"experiment_arm": "D"}
@@ -34,6 +40,12 @@ def test_txt_upload_analysis_report_and_delete() -> None:
         deleted = client.delete(f"/api/v1/documents/{document_id}")
         assert deleted.status_code == 200
         assert deleted.json()["status"] == "deleted"
+        with get_session_factory()() as session:
+            event_types = {
+                event.event_type
+                for event in session.query(AuditEvent).filter(AuditEvent.document_id == document_id)
+            }
+        assert {"document_uploaded", "analysis_created", "analysis_completed", "document_deleted"}.issubset(event_types)
 
 
 def test_rejects_spoofed_pdf() -> None:

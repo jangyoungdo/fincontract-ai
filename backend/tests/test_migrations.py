@@ -10,7 +10,9 @@ def test_initial_migration_is_recorded_and_idempotent() -> None:
     second = upgrade_database(engine)
     assert first in {"upgraded", "already_current"}
     assert second == "already_current"
-    assert {"documents", "analyses", "schema_migrations"}.issubset(inspect(engine).get_table_names())
+    assert {"documents", "analyses", "audit_events", "schema_migrations"}.issubset(
+        inspect(engine).get_table_names()
+    )
     with engine.connect() as connection:
         assert connection.execute(
             select(schema_migrations.c.version).where(schema_migrations.c.version == MIGRATION_VERSION)

@@ -48,6 +48,7 @@ services:
       LLM_PROVIDER: fake
       UPLOAD_DIR: /data/uploads
       REPORT_DIR: /data/reports
+      DOCUMENT_ENCRYPTION_KEY: ${DOCUMENT_ENCRYPTION_KEY:?set DOCUMENT_ENCRYPTION_KEY}
     depends_on:
       postgres: {condition: service_healthy}
       redis: {condition: service_healthy}
@@ -76,10 +77,26 @@ services:
       LLM_PROVIDER: fake
       UPLOAD_DIR: /data/uploads
       REPORT_DIR: /data/reports
+      DOCUMENT_ENCRYPTION_KEY: ${DOCUMENT_ENCRYPTION_KEY:?set DOCUMENT_ENCRYPTION_KEY}
     depends_on:
       postgres: {condition: service_healthy}
       redis: {condition: service_healthy}
       chroma: {condition: service_healthy}
+    volumes:
+      - upload-data:/data/uploads
+      - report-data:/data/reports
+
+  retention:
+    build: ./backend
+    command: ["python", "scripts/enforce_retention.py", "--loop"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://fincontract:${POSTGRES_PASSWORD:-local-development-only}@postgres:5432/fincontract
+      UPLOAD_DIR: /data/uploads
+      REPORT_DIR: /data/reports
+      DOCUMENT_ENCRYPTION_KEY: ${DOCUMENT_ENCRYPTION_KEY:?set DOCUMENT_ENCRYPTION_KEY}
+      RETENTION_INTERVAL_SECONDS: "300"
+    depends_on:
+      postgres: {condition: service_healthy}
     volumes:
       - upload-data:/data/uploads
       - report-data:/data/reports

@@ -13,8 +13,9 @@ from app.config import get_settings
 from app.models import AnalysisRecord, DocumentRecord, get_session_factory
 
 from .analysis_pipeline import DocumentAnalysisPipeline
+from .audit import add_audit_event
+from .encrypted_storage import read_encrypted
 from .text_extraction import extract_text
-
 
 QUEUE_NAME = "fincontract:analysis:queue"
 DEAD_LETTER_QUEUE_NAME = "fincontract:analysis:dead-letter"
@@ -68,13 +69,19 @@ def process_analysis(analysis_id: str, redis_client: Redis | None = None) -> Non
         if redis_client:
             set_progress(redis_client, analysis_id, "analyzing", 25)
         try:
-            data = Path(document.storage_path).read_bytes()
-            text = extract_text(data, Path(document.storage_path).suffix)
+            data = read_encrypted(Path(document.storage_path))
+            text = extract_text(data, Path(document.original_filename).suffix.lower())
             result = DocumentAnalysisPipeline().run(text, record.experiment_arm)
             record.status = "completed"
             record.disposition = result["disposition"]
             record.result_json = json.dumps(result, ensure_ascii=False)
             record.completed_at = datetime.now(timezone.utc)
+            add_audit_event(
+                session,
+                "analysis_completed",
+                document_id=document.id,
+                analysis_id=analysis_id,
+            )
             if redis_client:
                 set_progress(redis_client, analysis_id, "completed", 100)
         except Exception:
@@ -92,6 +99,12 @@ def process_analysis(analysis_id: str, redis_client: Redis | None = None) -> Non
             record.status = "failed"
             record.disposition = "needs_review"
             record.error_code = "ANALYSIS_FAILED"
+            add_audit_event(
+                session,
+                "analysis_failed",
+                document_id=document.id,
+                analysis_id=analysis_id,
+            )
             if redis_client:
                 redis_client.rpush(DEAD_LETTER_QUEUE_NAME, analysis_id)
                 set_progress(redis_client, analysis_id, "failed", 100)
