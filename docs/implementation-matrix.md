@@ -8,7 +8,7 @@
 | Frontend | 분석 대시보드 | implemented | browser E2E, unit/build verified | mock 분석만 연결 |
 | Frontend | 원문 뷰어 | partial | build verified | 마스킹 조항만 표시, 전체 원문 미제공 |
 | Frontend | 은행 비교 | partial | API fail-closed + build verified | 검증된 비교 데이터 미확보로 결과 미제공 |
-| Backend | FastAPI Gateway | implemented | API integration verified | 동기식 분석 runner |
+| Backend | FastAPI Gateway | implemented | API integration + worker status verified | sync/Redis async 전환은 환경 설정 |
 | Backend | PDF/DOCX/TXT 처리 | implemented | TXT browser E2E, real PDF/DOCX API verified | 실제 PDF/DOCX browser E2E 추가 필요 |
 | Backend | PII 마스킹 | prototype | unit verified | 이름·주소 탐지 미완료 |
 | Backend | 조항 분리 | implemented | integration verified | 복잡한 표·OCR 제외 |

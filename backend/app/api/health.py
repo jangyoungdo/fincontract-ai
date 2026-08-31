@@ -48,3 +48,21 @@ def ready(response: Response) -> dict:
     if not is_ready:
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
     return {"status": "ready" if is_ready else "degraded", "checks": checks}
+
+
+@router.get("/worker")
+def worker_status(response: Response) -> dict:
+    """Expose queue depth only; messages contain opaque analysis IDs."""
+    settings = get_settings()
+    if not settings.use_redis:
+        return {"status": "disabled", "queue_depth": 0, "dead_letter_depth": 0}
+    try:
+        redis_client = Redis.from_url(settings.redis_url, socket_timeout=1)
+        return {
+            "status": "ready",
+            "queue_depth": redis_client.llen("fincontract:analysis:queue"),
+            "dead_letter_depth": redis_client.llen("fincontract:analysis:dead-letter"),
+        }
+    except Exception:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        return {"status": "unavailable", "queue_depth": 0, "dead_letter_depth": 0}
