@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { Analysis, deleteDocument, uploadAndAnalyze } from "@/lib/api";
+import { Analysis, deleteDocument, uploadAndAnalyze, waitForAnalysis } from "@/lib/api";
 
 const stageLabels = ["문서 확인", "개인정보 보호", "위험 신호 탐색", "근거·결과 검토"];
 
@@ -16,7 +16,11 @@ export function AnalysisWorkspace() {
     event.preventDefault();
     if (!file) return;
     setBusy(true); setError(""); setAnalysis(null);
-    try { setAnalysis(await uploadAndAnalyze(file, arm)); }
+    try {
+      const created = await uploadAndAnalyze(file, arm);
+      setAnalysis(created);
+      setAnalysis(await waitForAnalysis(created));
+    }
     catch (reason) { setError(reason instanceof Error ? reason.message : "처리 중 오류가 발생했습니다."); }
     finally { setBusy(false); }
   }

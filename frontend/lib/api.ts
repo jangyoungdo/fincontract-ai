@@ -20,6 +20,7 @@ export type Analysis = {
   disposition: string;
   experiment_arm: string;
   result?: { findings: Finding[]; warnings: string[]; clause_count: number };
+  progress?: { state: string; percent: number };
 };
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://127.0.0.1:8000";
@@ -37,6 +38,18 @@ export async function uploadAndAnalyze(file: File, arm: "A" | "D"): Promise<Anal
   });
   if (!analyzed.ok) throw new Error("분석에 실패했습니다.");
   return analyzed.json();
+}
+
+export async function waitForAnalysis(analysis: Analysis): Promise<Analysis> {
+  let current = analysis;
+  for (let attempt = 0; attempt < 60 && current.status === "queued"; attempt += 1) {
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    const response = await fetch(`${API_BASE}/api/v1/analyses/${current.id}`);
+    if (!response.ok) throw new Error("분석 상태를 확인하지 못했습니다.");
+    current = await response.json();
+  }
+  if (current.status === "queued") throw new Error("분석 시간이 초과되었습니다. 잠시 후 다시 확인하세요.");
+  return current;
 }
 
 export async function deleteDocument(documentId: string): Promise<void> {
