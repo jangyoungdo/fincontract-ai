@@ -1,0 +1,31 @@
+.PHONY: setup-backend setup-frontend test-backend test-frontend run-backend run-frontend infra-check ingest-demo verify-index
+
+PYTHON := backend/.venv/bin/python
+
+setup-backend:
+	/opt/homebrew/bin/python3.12 -m venv backend/.venv
+	backend/.venv/bin/pip install -e 'backend[dev]'
+
+setup-frontend:
+	cd frontend && npm install
+
+test-backend:
+	cd backend && .venv/bin/pytest
+
+test-frontend:
+	cd frontend && npm run lint && npm test && npm run build
+
+run-backend:
+	cd backend && .venv/bin/uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+
+run-frontend:
+	cd frontend && npm run dev
+
+infra-check:
+	cd backend && .venv/bin/python scripts/check_infrastructure.py
+
+ingest-demo:
+	cd backend && .venv/bin/python scripts/ingest_corpus.py ../research/demo_manifest.json ../research/demo_corpus/clause_patterns.jsonl
+
+verify-index:
+	cd backend && .venv/bin/python scripts/verify_index.py

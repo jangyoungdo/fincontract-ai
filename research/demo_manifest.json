@@ -1,0 +1,31 @@
+{
+  "manifest_version": "demo-1.0.0",
+  "generated_at": "2026-08-31T00:00:00+09:00",
+  "cutoff_date": "2026-08-31",
+  "status": "verified",
+  "known_limitations": ["파이프라인 검증용 합성 조항이며 실제 법령·심결·분쟁사례가 아니다."],
+  "datasets": [
+    {
+      "dataset_id": "synthetic-clause-patterns-v1",
+      "corpus_type": "clause_patterns",
+      "source_name": "FinContract AI synthetic smoke fixtures",
+      "source_url": "https://example.invalid/fincontract/synthetic",
+      "authority": "synthetic",
+      "collection_method": "manually authored for software verification",
+      "inclusion_criteria": ["현재 3개 규칙의 검색 파이프라인 검증 문장"],
+      "exclusion_criteria": ["실제 개인·기업·사건 정보"],
+      "raw_count": 3,
+      "deduplicated_count": 3,
+      "accepted_count": 3,
+      "rejected_count": 0,
+      "deduplication_key": "document_id:chunk_id",
+      "content_hash": "synthetic-demo-v1",
+      "license_status": "approved",
+      "redistribution_allowed": true,
+      "review_status": "verified",
+      "reviewer": "software-test-fixture",
+      "known_limitations": ["법률 근거로 사용할 수 없음"],
+      "evaluation_exclusion": true
+    }
+  ]
+}

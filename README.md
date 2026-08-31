@@ -20,6 +20,8 @@
 
 상세 상태와 다음 작업은 [PROJECT_STATUS.md](PROJECT_STATUS.md)를 참고하세요.
 
+레이어별 실제 구현과 검증 여부는 [시스템 아키텍처 구현·검증 매트릭스](docs/implementation-matrix.md)에서 추적합니다. `implemented`와 `verified`를 구분하며, 실행하지 못한 Docker나 실제 데이터·Claude 연결은 완료로 표시하지 않습니다.
+
 현재 진행 중인 첫 비교 기준은 [실험 001: 여신약관 규칙 엔진](experiments/001-rule-baseline/README.md)입니다.
 
 ## 우리가 실험하려는 것
@@ -111,6 +113,34 @@ Infrastructure         Docker Compose · CI · 비밀정보 관리 · 관측성
 - LLM: Anthropic Claude Messages API + Structured Outputs
 - Optional async processing: Redis + Worker
 - Local runtime: Docker Compose
+
+## 로컬 전체 실행
+
+Docker가 없는 환경에서도 Backend와 Frontend를 각각 검증할 수 있습니다.
+
+```bash
+make setup-backend
+make setup-frontend
+make test-backend
+make ingest-demo
+make verify-index
+make test-frontend
+```
+
+개발 서버는 두 터미널에서 실행합니다.
+
+```bash
+make run-backend
+make run-frontend
+```
+
+그 다음 `http://localhost:3000`에서 TXT, PDF 또는 DOCX를 업로드합니다. 현재 실제 법률 코퍼스와 Claude는 연결하지 않았으므로 화면의 근거와 분석은 합성·mock 상태를 명확히 표시합니다.
+
+Docker 런타임이 준비된 경우 다음 명령으로 PostgreSQL, Redis, ChromaDB, Backend와 Frontend를 함께 기동합니다.
+
+```bash
+docker compose up --build
+```
 
 ## 주요 문서
 
