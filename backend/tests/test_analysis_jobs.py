@@ -16,6 +16,14 @@ class FakeRedis:
     def rpush(self, key: str, value: str) -> None:
         self.queues.setdefault(key, []).append(value)
 
+    def incr(self, key: str) -> int:
+        value = int(self.values.get(key, "0")) + 1
+        self.values[key] = str(value)
+        return value
+
+    def expire(self, key: str, seconds: int) -> None:
+        assert key in self.values and seconds > 0
+
 
 def test_progress_state_is_non_sensitive_and_enqueue_uses_only_analysis_id() -> None:
     redis_client = FakeRedis()

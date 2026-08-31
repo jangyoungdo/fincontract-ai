@@ -18,7 +18,7 @@
 | RAG | 5개 컬렉션 | implemented | read/write verified | 실제 검증 코퍼스 없음 |
 | RAG | Hybrid Search | implemented | synthetic retrieval and analysis grounding verified | hashing vector는 데모 전용 |
 | Data | PostgreSQL | implemented | local process read/write + idempotent migration verified | Alembic 전환 여부 미결정 |
-| Data | Redis | implemented | local Redis worker E2E (`queued→completed`) verified | worker 운영 재시도·DLQ 미구현 |
+| Data | Redis | implemented | local Redis worker E2E (`queued→completed`) verified | 재시도·DLQ 코드 구현, 실패 E2E 추가 필요 |
 | Data | Data Pipeline | implemented | manifest/ingest/index verified | 합성 3건만 적재 |
 | Infra | Docker Compose | implemented | pending | Docker·Colima 미설치 |
 

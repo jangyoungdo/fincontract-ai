@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./storage/fincontract.db"
     redis_url: str = "redis://127.0.0.1:6379/0"
     use_redis: bool = False
+    worker_max_attempts: int = 3
     chroma_mode: str = "persistent"
     chroma_path: Path = Path("./storage/chroma")
     chroma_host: str = "127.0.0.1"
