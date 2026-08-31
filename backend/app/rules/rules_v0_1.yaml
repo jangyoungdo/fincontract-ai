@@ -1,6 +1,6 @@
 {
   "ruleset_id": "loan-terms-baseline",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "status": "experimental_unreviewed",
   "scope": "은행 여신거래기본약관 형태의 합성 한국어 조항",
   "limitations": [
@@ -61,6 +61,71 @@
       ],
       "context_terms": ["관할", "법원", "소송", "소재지"],
       "legal_basis_candidates": ["약관의 규제에 관한 법률 제14조", "약관의 규제에 관한 법률 제6조"]
+    },
+    {
+      "id": "R01_EXCESSIVE_LIQUIDATED_DAMAGES",
+      "name": "과도하거나 일방적인 손해배상 예정",
+      "category": "liquidated_damages",
+      "priority": 1,
+      "positive_patterns": [
+        "(?:고객|채무자).{0,30}(?:위약금|손해배상금).{0,30}(?:전액|일체|즉시).{0,20}(?:부담|지급)",
+        "손해의 발생 여부와 관계없이.{0,40}(?:위약금|손해배상)"
+      ],
+      "negative_patterns": ["실제 발생한 손해", "합리적으로 산정", "법령에 따른"],
+      "context_terms": ["위약금", "손해배상", "고객", "즉시"],
+      "legal_basis_candidates": ["약관의 규제에 관한 법률 제8조", "약관의 규제에 관한 법률 제6조"]
+    },
+    {
+      "id": "R02_UNFAIR_TERMINATION",
+      "name": "사업자의 광범위한 임의 해지",
+      "category": "unfair_termination",
+      "priority": 2,
+      "positive_patterns": [
+        "(?:은행|회사|사업자).{0,30}(?:필요하다고 인정|임의로 판단).{0,30}(?:해지|종료).{0,20}(?:할 수 있다|한다)",
+        "(?:은행|회사|사업자).{0,25}언제든지.{0,30}(?:해지|종료)"
+      ],
+      "negative_patterns": ["고객에게 상당한 기간", "법령상 해지 사유", "고객의 동의"],
+      "context_terms": ["해지", "종료", "은행", "고객"],
+      "legal_basis_candidates": ["약관의 규제에 관한 법률 제9조", "약관의 규제에 관한 법률 제6조"]
+    },
+    {
+      "id": "R03_LIMITATION_OF_LIABILITY",
+      "name": "사업자 책임의 포괄적 면제",
+      "category": "limitation_of_liability",
+      "priority": 1,
+      "positive_patterns": [
+        "(?:은행|회사|사업자).{0,30}(?:어떠한|일체의).{0,20}(?:책임을 지지 않|책임이 없)",
+        "(?:은행|회사|사업자)의 고의 또는 과실 여부와 관계없이.{0,30}(?:면책|책임이 없)"
+      ],
+      "negative_patterns": ["고의 또는 중대한 과실", "법령에서 정한 책임"],
+      "context_terms": ["책임", "면책", "은행", "과실"],
+      "legal_basis_candidates": ["약관의 규제에 관한 법률 제7조", "약관의 규제에 관한 법률 제6조"]
+    },
+    {
+      "id": "R06_TRANSFER_OF_RIGHTS",
+      "name": "고객 동의 없는 계약상 지위 이전",
+      "category": "transfer_of_rights",
+      "priority": 2,
+      "positive_patterns": [
+        "(?:은행|회사|사업자).{0,30}고객의 동의 없이.{0,30}(?:양도|이전|승계).{0,20}(?:할 수 있다|한다)",
+        "(?:채권|계약상 지위).{0,30}(?:제3자에게|타인에게).{0,30}(?:양도|이전)"
+      ],
+      "negative_patterns": ["고객의 사전 동의", "법률에 따른 이전"],
+      "context_terms": ["양도", "이전", "동의", "제3자"],
+      "legal_basis_candidates": ["약관의 규제에 관한 법률 제11조", "약관의 규제에 관한 법률 제6조"]
+    },
+    {
+      "id": "R07_AUTOMATIC_RENEWAL",
+      "name": "고객 선택권 없는 자동 갱신",
+      "category": "automatic_renewal",
+      "priority": 2,
+      "positive_patterns": [
+        "(?:고객의 의사와 관계없이|별도 통지 없이).{0,30}(?:자동으로|자동).{0,20}(?:갱신|연장)",
+        "만료일에.{0,30}(?:자동으로|자동).{0,20}(?:갱신|연장)"
+      ],
+      "negative_patterns": ["고객이 갱신 거절", "갱신하지 않을 의사", "사전 통지"],
+      "context_terms": ["자동", "갱신", "연장", "고객"],
+      "legal_basis_candidates": ["약관의 규제에 관한 법률 제9조", "약관의 규제에 관한 법률 제6조"]
     }
   ]
 }

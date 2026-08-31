@@ -1,4 +1,4 @@
-.PHONY: setup-backend setup-frontend test-backend test-frontend run-backend run-frontend infra-check ingest-demo verify-index
+.PHONY: setup-backend setup-frontend test-backend test-frontend frontend-check api-check e2e run-backend run-frontend infra-check ingest-demo verify-index
 
 PYTHON := backend/.venv/bin/python
 
@@ -14,6 +14,13 @@ test-backend:
 
 test-frontend:
 	cd frontend && npm run lint && npm test && npm run build
+
+frontend-check: test-frontend
+
+api-check:
+	cd backend && .venv/bin/pytest tests/test_documents_api.py tests/test_health.py
+
+e2e: api-check
 
 run-backend:
 	cd backend && .venv/bin/uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
