@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class DocumentResponse(BaseModel):
@@ -35,3 +35,11 @@ class AnalysisResponse(BaseModel):
 class DeleteResponse(BaseModel):
     id: str
     status: Literal["deleted"]
+
+
+class AuditEventResponse(BaseModel):
+    id: str
+    event_type: str
+    document_id: str | None
+    analysis_id: str | None
+    created_at: datetime
