@@ -1,6 +1,8 @@
+from io import BytesIO
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+from docx import Document
 
 from app.main import app
 
@@ -42,3 +44,50 @@ def test_rejects_spoofed_pdf() -> None:
         )
     assert response.status_code == 400
     assert "시그니처" in response.json()["detail"]
+
+
+def test_real_docx_upload_extracts_and_analyzes_text() -> None:
+    stream = BytesIO()
+    document = Document()
+    document.add_paragraph(SAMPLE)
+    document.save(stream)
+    with TestClient(app) as client:
+        uploaded = client.post(
+            "/api/v1/documents",
+            files={"file": ("terms.docx", stream.getvalue(), "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
+        )
+        assert uploaded.status_code == 201, uploaded.text
+        analyzed = client.post(f"/api/v1/documents/{uploaded.json()['id']}/analyses", json={"experiment_arm": "A"})
+    assert analyzed.status_code == 201, analyzed.text
+    assert len(analyzed.json()["result"]["findings"]) == 1
+
+
+def test_real_pdf_upload_extracts_and_analyzes_text() -> None:
+    # A compact, valid one-page PDF fixture with a literal text stream.
+    pdf = b"""%PDF-1.4
+1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj
+2 0 obj<</Type/Pages/Count 1/Kids[3 0 R]>>endobj
+3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Resources<</Font<</F1 4 0 R>>>>/Contents 5 0 R>>endobj
+4 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj
+5 0 obj<</Length 95>>stream
+BT /F1 12 Tf 72 720 Td (Bank may unilaterally change service terms when necessary.) Tj ET
+endstream endobj
+xref
+0 6
+0000000000 65535 f\x20
+0000000009 00000 n\x20
+0000000058 00000 n\x20
+0000000115 00000 n\x20
+0000000251 00000 n\x20
+0000000321 00000 n\x20
+trailer<</Size 6/Root 1 0 R>>
+startxref
+468
+%%EOF"""
+    with TestClient(app) as client:
+        uploaded = client.post("/api/v1/documents", files={"file": ("terms.pdf", pdf, "application/pdf")})
+        assert uploaded.status_code == 201, uploaded.text
+        # This English fixture confirms actual PDF extraction; it need not trigger Korean rules.
+        analyzed = client.post(f"/api/v1/documents/{uploaded.json()['id']}/analyses", json={"experiment_arm": "A"})
+    assert analyzed.status_code == 201, analyzed.text
+    assert analyzed.json()["result"]["clause_count"] == 1

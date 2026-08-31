@@ -9,7 +9,7 @@ from dataclasses import asdict
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from app.llm import ModelRouter, RoutingContext
+from app.llm import ModelRouter, RoutingContext, get_provider
 from app.rules import RuleEngine
 
 from .pii import mask_pii
@@ -30,6 +30,7 @@ class PrototypePipeline:
     def __init__(self) -> None:
         self.rules = RuleEngine()
         self.router = ModelRouter(environment=MOCK_MODELS)
+        self.provider = get_provider()
 
     def analyze(self, text: str, experiment_arm: str = "D") -> Dict[str, Any]:
         if experiment_arm not in {"A", "D"}:
@@ -73,7 +74,7 @@ class PrototypePipeline:
                         estimated_input_tokens=max(1, len(masked_text) // 3),
                     )
                 )
-                assessment = self._mock_assessment(match, evidence)
+                assessment = self.provider.assess(signal, evidence, route.model)
                 usage.append(self._usage(route, index, max(1, len(masked_text) // 3)))
                 verification = self._verify(assessment, evidence)
                 verifier_route = self.router.route(RoutingContext(role="verifier"))
@@ -109,8 +110,8 @@ class PrototypePipeline:
             "disposition": disposition,
             "experiment": {
                 "arm": experiment_arm,
-                "provider": "mock" if experiment_arm == "D" else "none",
-                "synthetic_agent_output": experiment_arm == "D",
+                "provider": self.provider.name if experiment_arm == "D" else "none",
+                "synthetic_agent_output": experiment_arm == "D" and self.provider.name == "fake",
             },
             "document": {
                 "contract_type": "loan_terms",
@@ -138,18 +139,6 @@ class PrototypePipeline:
             ],
             "created_at": created_at,
             "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
-        }
-
-    @staticmethod
-    def _mock_assessment(match: Any, evidence: List[Dict[str, Any]]) -> Dict[str, Any]:
-        return {
-            "risk_level": "medium",
-            "applicability": "unknown",
-            "summary": f"{match.category} 관련 위험 신호가 있어 계약 전체 문맥의 검토가 필요합니다.",
-            "rationale": match.rationale,
-            "counter_considerations": ["개별 협상 여부", "법령상 허용 사유", "사전 통지와 선택권 제공 여부"],
-            "review_questions": ["고객에게 실질적인 거절 또는 해지 선택권이 제공됩니까?"],
-            "cited_evidence_ids": [item["evidence_id"] for item in evidence],
         }
 
     @staticmethod

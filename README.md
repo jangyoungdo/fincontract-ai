@@ -124,7 +124,8 @@ make setup-frontend
 make test-backend
 make ingest-demo
 make verify-index
-make test-frontend
+make frontend-check
+make e2e
 ```
 
 개발 서버는 두 터미널에서 실행합니다.

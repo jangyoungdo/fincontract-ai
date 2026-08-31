@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     chroma_host: str = "127.0.0.1"
     chroma_port: int = 8001
     llm_provider: str = "fake"
+    allow_external_llm: bool = False
     anthropic_api_key: str = Field(default="", repr=False)
     anthropic_fast_model: str = ""
     anthropic_balanced_model: str = ""
