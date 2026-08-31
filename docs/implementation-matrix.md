@@ -4,21 +4,21 @@
 
 | 레이어 | 구성요소 | 구현 상태 | 실행 검증 | 남은 제한 |
 |---|---|---:|---:|---|
-| Frontend | PDF 업로드 | implemented | TXT browser E2E verified | 실제 PDF browser E2E 추가 필요 |
+| Frontend | PDF 업로드 | implemented | TXT/PDF browser E2E + PDF component workflow verified | 스캔 PDF는 OCR 정책 필요 |
 | Frontend | 분석 대시보드 | implemented | browser E2E, unit/build verified | mock 분석만 연결 |
 | Frontend | 원문 뷰어 | partial | build verified | 마스킹 조항만 표시, 전체 원문 미제공 |
 | Frontend | 은행 비교 | partial | API fail-closed + build verified | 검증된 비교 데이터 미확보로 결과 미제공 |
 | Backend | FastAPI Gateway | implemented | API integration + worker status verified | sync/Redis async 전환은 환경 설정 |
-| Backend | PDF/DOCX/TXT 처리 | implemented | TXT browser E2E, real PDF/DOCX API verified | 실제 PDF/DOCX browser E2E 추가 필요 |
+| Backend | PDF/DOCX/TXT 처리 | implemented | TXT/PDF browser E2E, real PDF/DOCX API verified | 실제 DOCX browser E2E 추가 필요 |
 | Backend | PII 마스킹 | implemented | 이메일·전화·주민번호·카드·계좌후보·라벨형 이름/주소 unit verified | 비정형 이름·주소 및 OCR PII는 fail-closed 운영 검증 필요 |
 | Backend | 조항 분리 | implemented | integration verified | 복잡한 표·OCR 제외 |
 | Backend | 위험도 판정 | prototype | 8-rule unit verified | 합성 데이터, 전문가 검토 미완료 |
 | Backend | LLM 분석 | partial | fake-provider E2E, structured-output contract, opt-in/fail-closed verified | 실제 Claude 키·연결 미검증 |
-| Backend | 리포트 생성 | implemented | JSON/PDF API integration + frontend download build verified | 실제 브라우저 다운로드 E2E 추가 필요 |
+| Backend | 리포트 생성 | implemented | JSON/PDF API integration + browser download E2E verified | 다중 페이지 회귀셋 확장 필요 |
 | RAG | 5개 컬렉션 | implemented | read/write verified | 실제 검증 코퍼스 없음 |
 | RAG | Hybrid Search | implemented | pre-analysis synthetic grounding + verified evidence gate verified | 실제 검증 코퍼스 없음, hashing vector는 데모 전용 |
 | Data | PostgreSQL | implemented | local process read/write + idempotent migration verified | Alembic 전환 여부 미결정 |
-| Data | Redis | implemented | local Redis worker E2E (`queued→completed`) + deterministic retry/DLQ integration verified | 실제 Redis 장애 주입 E2E 추가 필요 |
+| Data | Redis | implemented | local Redis success E2E + real Redis retry x2/DLQ/needs_review verified | 네트워크 단절·복구 시나리오 추가 필요 |
 | Data | Data Pipeline | implemented | manifest/ingest/index verified | 합성 3건만 적재 |
 | Data | Encrypted file storage | implemented | Fernet round-trip + plaintext absence verified | 운영 키 회전·외부 KMS 미구현 |
 | Data | Audit / retention | implemented | lifecycle audit + document TTL + 365-day audit expiry + token-protected query verified | 관리자 조회 UI 미구현 |
