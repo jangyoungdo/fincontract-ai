@@ -9,11 +9,11 @@ from dataclasses import asdict
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+from app.config import get_settings
 from app.llm import ModelRouter, RoutingContext, get_provider
 from app.rules import RuleEngine
 
 from .pii import mask_pii
-
 
 MOCK_MODELS = {
     "ANTHROPIC_FAST_MODEL": "mock-fast",
@@ -29,10 +29,25 @@ class PrototypePipeline:
 
     def __init__(self) -> None:
         self.rules = RuleEngine()
-        self.router = ModelRouter(environment=MOCK_MODELS)
         self.provider = get_provider()
+        settings = get_settings()
+        routing_models = (
+            MOCK_MODELS
+            if self.provider.name == "mock"
+            else {
+                "ANTHROPIC_FAST_MODEL": settings.anthropic_fast_model,
+                "ANTHROPIC_BALANCED_MODEL": settings.anthropic_balanced_model,
+                "ANTHROPIC_DEEP_MODEL": settings.anthropic_deep_model,
+            }
+        )
+        self.router = ModelRouter(environment=routing_models)
 
-    def analyze(self, text: str, experiment_arm: str = "D") -> Dict[str, Any]:
+    def analyze(
+        self,
+        text: str,
+        experiment_arm: str = "D",
+        retrieved_evidence: Optional[List[Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
         if experiment_arm not in {"A", "D"}:
             raise ValueError("Prototype supports experiment arms A and D")
         if not text.strip():
@@ -54,7 +69,7 @@ class PrototypePipeline:
 
         for index, match in enumerate(rule_matches, start=1):
             signal = match.to_dict()
-            evidence = [
+            candidate_evidence = [
                 {
                     "evidence_id": f"candidate:{match.rule_id}:{basis_index}",
                     "title": basis,
@@ -63,6 +78,7 @@ class PrototypePipeline:
                 }
                 for basis_index, basis in enumerate(match.legal_basis_candidates, start=1)
             ]
+            evidence = list(retrieved_evidence or candidate_evidence)
             assessment: Optional[Dict[str, Any]] = None
             verification = {"status": "not_run", "issues": [], "attempts": 0}
 
@@ -76,7 +92,11 @@ class PrototypePipeline:
                 )
                 assessment = self.provider.assess(signal, evidence, route.model)
                 usage.append(self._usage(route, index, max(1, len(masked_text) // 3)))
-                verification = self._verify(assessment, evidence)
+                verification = self._verify(
+                    assessment,
+                    evidence,
+                    require_verified_evidence=True,
+                )
                 verifier_route = self.router.route(RoutingContext(role="verifier"))
                 usage.append(self._usage(verifier_route, index, max(1, len(str(assessment)) // 3)))
 
@@ -89,6 +109,12 @@ class PrototypePipeline:
                     },
                     "rule_signal": signal,
                     "evidence": evidence,
+                    "legal_basis_candidates": candidate_evidence,
+                    "grounding": {
+                        "status": "grounded" if retrieved_evidence else "unavailable",
+                        "retrieved_count": len(retrieved_evidence or []),
+                        "corpus_version": self._corpus_version(retrieved_evidence or []),
+                    },
                     "assessment": assessment,
                     "verification": verification,
                     "review_status": "unreviewed",
@@ -111,7 +137,7 @@ class PrototypePipeline:
             "experiment": {
                 "arm": experiment_arm,
                 "provider": self.provider.name if experiment_arm == "D" else "none",
-                "synthetic_agent_output": experiment_arm == "D" and self.provider.name == "fake",
+                "synthetic_agent_output": experiment_arm == "D" and self.provider.name == "mock",
             },
             "document": {
                 "contract_type": "loan_terms",
@@ -124,7 +150,7 @@ class PrototypePipeline:
             "versions": {
                 "ruleset": self.rules.version,
                 "routing_policy": self.router.policy["policy_version"],
-                "corpus": "not_connected",
+                "corpus": self._corpus_version(retrieved_evidence or []),
             },
             "findings": findings,
             "usage": {
@@ -142,21 +168,36 @@ class PrototypePipeline:
         }
 
     @staticmethod
-    def _verify(assessment: Dict[str, Any], evidence: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _verify(
+        assessment: Dict[str, Any],
+        evidence: List[Dict[str, Any]],
+        require_verified_evidence: bool = False,
+    ) -> Dict[str, Any]:
         allowed_ids = {item["evidence_id"] for item in evidence}
         cited_ids = set(assessment.get("cited_evidence_ids", []))
         issues = []
         if not cited_ids or not cited_ids.issubset(allowed_ids):
             issues.append({"code": "INVALID_EVIDENCE_ID", "message": "허용되지 않은 근거 ID"})
+        if require_verified_evidence:
+            cited = [item for item in evidence if item["evidence_id"] in cited_ids]
+            if any(item.get("status") != "verified" for item in cited):
+                issues.append(
+                    {"code": "UNVERIFIED_EVIDENCE", "message": "검증되지 않은 검색 근거 인용"}
+                )
         combined = " ".join(str(value) for value in assessment.values())
         if any(term in combined for term in FORBIDDEN_CONCLUSIONS):
             issues.append({"code": "LEGAL_CONCLUSION", "message": "확정적 법률 표현"})
         return {"status": "failed" if issues else "passed", "issues": issues, "attempts": 1}
 
     @staticmethod
+    def _corpus_version(evidence: List[Dict[str, Any]]) -> str:
+        versions = sorted({item.get("manifest_version", "unknown") for item in evidence})
+        return ",".join(versions) if versions else "not_available"
+
+    @staticmethod
     def _usage(route: Any, sequence: int, estimated_input_tokens: int) -> Dict[str, Any]:
         data = asdict(route)
-        data.update({"sequence": sequence, "estimated_input_tokens": estimated_input_tokens, "provider": "mock"})
+        data.update({"sequence": sequence, "estimated_input_tokens": estimated_input_tokens})
         return data
 
     @staticmethod

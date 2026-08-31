@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
 from anthropic import Anthropic
+from pydantic import BaseModel, Field
 
 from app.config import get_settings
 
@@ -14,6 +15,16 @@ class Provider(Protocol):
     name: str
 
     def assess(self, rule_signal: dict[str, Any], evidence: list[dict[str, Any]], model: str) -> dict[str, Any]: ...
+
+
+class AssessmentOutput(BaseModel):
+    risk_level: Literal["low", "medium", "high"]
+    applicability: Literal["applicable", "not_applicable", "unknown"]
+    summary: str = Field(min_length=1, max_length=1000)
+    rationale: str = Field(min_length=1, max_length=2000)
+    counter_considerations: list[str] = Field(max_length=10)
+    review_questions: list[str] = Field(max_length=10)
+    cited_evidence_ids: list[str] = Field(min_length=1, max_length=20)
 
 
 class FakeProvider:
@@ -50,12 +61,15 @@ class AnthropicProvider:
             model=model,
             max_tokens=600,
             messages=[{"role": "user", "content": json.dumps(prompt, ensure_ascii=False)}],
+            output_config={
+                "format": {
+                    "type": "json_schema",
+                    "schema": AssessmentOutput.model_json_schema(),
+                }
+            },
         )
         text = "".join(block.text for block in response.content if hasattr(block, "text"))
-        result = json.loads(text)
-        if not isinstance(result, dict):
-            raise ValueError("Anthropic response must be a JSON object")
-        return result
+        return AssessmentOutput.model_validate_json(text).model_dump()
 
 
 def get_provider() -> Provider:
@@ -68,4 +82,15 @@ def get_provider() -> Provider:
         raise RuntimeError("Anthropic is disabled: set ALLOW_EXTERNAL_LLM=true explicitly")
     if not settings.anthropic_api_key:
         raise RuntimeError("ANTHROPIC_API_KEY is required when Anthropic is enabled")
+    missing_models = [
+        name
+        for name, value in {
+            "ANTHROPIC_FAST_MODEL": settings.anthropic_fast_model,
+            "ANTHROPIC_BALANCED_MODEL": settings.anthropic_balanced_model,
+            "ANTHROPIC_DEEP_MODEL": settings.anthropic_deep_model,
+        }.items()
+        if not value
+    ]
+    if missing_models:
+        raise RuntimeError(f"Required Anthropic model settings are missing: {', '.join(missing_models)}")
     return AnthropicProvider(settings.anthropic_api_key)

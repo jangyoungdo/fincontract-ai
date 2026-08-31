@@ -13,10 +13,10 @@
 | Backend | PII 마스킹 | prototype | unit verified | 이름·주소 탐지 미완료 |
 | Backend | 조항 분리 | implemented | integration verified | 복잡한 표·OCR 제외 |
 | Backend | 위험도 판정 | prototype | 8-rule unit verified | 합성 데이터, 전문가 검토 미완료 |
-| Backend | LLM 분석 | implemented | fake-provider E2E, opt-in/fail-closed tests | 실제 Claude 키·연결 미검증 |
+| Backend | LLM 분석 | partial | fake-provider E2E, structured-output contract, opt-in/fail-closed verified | 실제 Claude 키·연결 미검증 |
 | Backend | 리포트 생성 | partial | API integration verified | JSON 리포트만 제공, PDF/다운로드 미구현 |
 | RAG | 5개 컬렉션 | implemented | read/write verified | 실제 검증 코퍼스 없음 |
-| RAG | Hybrid Search | implemented | synthetic retrieval and analysis grounding verified | hashing vector는 데모 전용 |
+| RAG | Hybrid Search | implemented | pre-analysis synthetic grounding + verified evidence gate verified | 실제 검증 코퍼스 없음, hashing vector는 데모 전용 |
 | Data | PostgreSQL | implemented | local process read/write + idempotent migration verified | Alembic 전환 여부 미결정 |
 | Data | Redis | implemented | local Redis worker E2E (`queued→completed`) verified | 재시도·DLQ 코드 구현, 실패 E2E 추가 필요 |
 | Data | Data Pipeline | implemented | manifest/ingest/index verified | 합성 3건만 적재 |
