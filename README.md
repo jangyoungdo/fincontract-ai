@@ -15,9 +15,12 @@
 - 모노레포 디렉터리와 데이터 거버넌스 시작 문서 준비 완료
 - 독립 Git 저장소와 worktree 기반 협업 규칙 준비 완료
 - 실제 애플리케이션 코드는 아직 구현하지 않음
+- 실험 001용 여신약관 3개 규칙 기준선과 합성 스모크 평가 구현
 - 리서치 통계 641건·16건은 근거 manifest 검증 전까지 후보 수로만 관리
 
 상세 상태와 다음 작업은 [PROJECT_STATUS.md](PROJECT_STATUS.md)를 참고하세요.
+
+현재 진행 중인 첫 비교 기준은 [실험 001: 여신약관 규칙 엔진](experiments/001-rule-baseline/README.md)입니다.
 
 ## 우리가 실험하려는 것
 
@@ -117,6 +120,7 @@ Infrastructure         Docker Compose · CI · 비밀정보 관리 · 관측성
 - [데이터 거버넌스](docs/data-governance.md)
 - [평가 기준](docs/evaluation.md)
 - [실험 운영 가이드](docs/experiments.md)
+- [에이전트 모델·토큰 라우팅](docs/model-routing.md)
 - [기여 가이드](CONTRIBUTING.md)
 - [Git 협업 및 worktree 운영](docs/git-workflow.md)
 - [리서치 자료 준비 안내](research/README.md)

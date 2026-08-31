@@ -1,0 +1,43 @@
+{
+  "policy_version": "0.1.0",
+  "provider": "anthropic",
+  "model_tiers": {
+    "fast": {
+      "model_env": "ANTHROPIC_FAST_MODEL",
+      "purpose": "분류, 짧은 계획, 형식 및 인용 검증",
+      "default_max_output_tokens": 700
+    },
+    "balanced": {
+      "model_env": "ANTHROPIC_BALANCED_MODEL",
+      "purpose": "근거 기반 계약 조항 분석",
+      "default_max_output_tokens": 1600
+    },
+    "deep": {
+      "model_env": "ANTHROPIC_DEEP_MODEL",
+      "purpose": "고위험·상충 근거의 제한적 재검토",
+      "default_max_output_tokens": 2400
+    }
+  },
+  "roles": {
+    "planner": {"default_tier": "fast", "max_input_tokens": 3000, "max_turns": 1},
+    "evidence_selector": {"default_tier": "fast", "max_input_tokens": 5000, "max_turns": 1},
+    "analyst": {"default_tier": "balanced", "max_input_tokens": 12000, "max_turns": 1},
+    "verifier": {"default_tier": "fast", "max_input_tokens": 6000, "max_turns": 1},
+    "adjudicator": {"default_tier": "deep", "max_input_tokens": 14000, "max_turns": 1}
+  },
+  "escalation": {
+    "verifier_to_balanced_after_failed_attempts": 1,
+    "analyst_to_deep_requires_high_risk_and_conflicting_evidence": true,
+    "deep_daily_request_limit": 20
+  },
+  "non_llm_components": [
+    "file_validation",
+    "pdf_text_extraction",
+    "pii_masking",
+    "clause_splitting",
+    "rule_engine",
+    "vector_search",
+    "citation_span_check",
+    "report_rendering"
+  ]
+}
