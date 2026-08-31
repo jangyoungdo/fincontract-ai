@@ -78,6 +78,19 @@ class PrototypePipelineTest(unittest.TestCase):
         self.assertTrue(masked.passed)
         self.assertEqual(3, masked.replacement_count)
 
+    def test_masking_detects_labeled_korean_name_and_address(self) -> None:
+        masked = mask_pii("성명: 홍길동\n주소: 서울특별시 종로구 세종대로 1\n대출금 1억원")
+        self.assertTrue(masked.passed)
+        self.assertEqual(["name", "address"], masked.detected_types)
+        self.assertIn("성명: [NAME_1]", masked.masked_text)
+        self.assertIn("주소: [ADDRESS_1]", masked.masked_text)
+        self.assertNotIn("홍길동", masked.masked_text)
+        self.assertNotIn("세종대로", masked.masked_text)
+
+    def test_masking_does_not_treat_legal_venue_as_personal_address(self) -> None:
+        text = "은행 본점 소재지 법원을 전속적 관할법원으로 한다."
+        self.assertEqual(text, mask_pii(text).masked_text)
+
 
 if __name__ == "__main__":
     unittest.main()

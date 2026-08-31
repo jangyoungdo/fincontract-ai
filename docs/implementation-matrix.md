@@ -10,7 +10,7 @@
 | Frontend | 은행 비교 | partial | API fail-closed + build verified | 검증된 비교 데이터 미확보로 결과 미제공 |
 | Backend | FastAPI Gateway | implemented | API integration + worker status verified | sync/Redis async 전환은 환경 설정 |
 | Backend | PDF/DOCX/TXT 처리 | implemented | TXT browser E2E, real PDF/DOCX API verified | 실제 PDF/DOCX browser E2E 추가 필요 |
-| Backend | PII 마스킹 | prototype | unit verified | 이름·주소 탐지 미완료 |
+| Backend | PII 마스킹 | implemented | 이메일·전화·주민번호·카드·계좌후보·라벨형 이름/주소 unit verified | 비정형 이름·주소 및 OCR PII는 fail-closed 운영 검증 필요 |
 | Backend | 조항 분리 | implemented | integration verified | 복잡한 표·OCR 제외 |
 | Backend | 위험도 판정 | prototype | 8-rule unit verified | 합성 데이터, 전문가 검토 미완료 |
 | Backend | LLM 분석 | partial | fake-provider E2E, structured-output contract, opt-in/fail-closed verified | 실제 Claude 키·연결 미검증 |

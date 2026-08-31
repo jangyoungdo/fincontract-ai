@@ -16,6 +16,20 @@ class MaskingResult:
 
 
 PATTERNS: List[Tuple[str, Pattern[str]]] = [
+    (
+        "name",
+        re.compile(
+            r"(?P<prefix>(?:성명|이름|계약자명|채무자명|고객명)\s*[:：]\s*)"
+            r"(?P<value>[가-힣]{2,5})"
+        ),
+    ),
+    (
+        "address",
+        re.compile(
+            r"(?P<prefix>(?:주소|거주지|송달주소)\s*[:：]\s*)"
+            r"(?P<value>[가-힣][^\n;.!?]{4,99})"
+        ),
+    ),
     ("email", re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")),
     ("phone", re.compile(r"(?<!\d)(?:01[016789]|0\d{1,2})[- ]?\d{3,4}[- ]?\d{4}(?!\d)")),
     ("resident_id", re.compile(r"(?<!\d)\d{6}[- ]?[1-8]\d{6}(?!\d)")),
@@ -31,11 +45,12 @@ def mask_pii(text: str) -> MaskingResult:
     replacement_count = 0
 
     for pii_type, pattern in PATTERNS:
-        def replace(_: re.Match[str]) -> str:
+        def replace(match: re.Match[str]) -> str:
             nonlocal replacement_count
             counters[pii_type] = counters.get(pii_type, 0) + 1
             replacement_count += 1
-            return f"[{pii_type.upper()}_{counters[pii_type]}]"
+            prefix = match.groupdict().get("prefix", "")
+            return f"{prefix}[{pii_type.upper()}_{counters[pii_type]}]"
 
         masked, count = pattern.subn(replace, masked)
         if count:
