@@ -30,5 +30,5 @@ redis_data/
 .DS_Store
 .worktrees/
 
-# Retained local comparison artifact; v3 is the published architecture.
+# Retained local comparison artifact; v4 is the published architecture.
 assets/fincontract-ai-architecture-v2.png
