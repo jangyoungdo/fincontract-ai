@@ -15,11 +15,11 @@
 | Backend | 위험도 판정 | prototype | 8-rule unit verified | 합성 데이터, 전문가 검토 미완료 |
 | Backend | LLM 분석 | partial | fake-provider E2E, structured-output contract, opt-in/fail-closed verified | 실제 Claude 키·연결 미검증 |
 | Backend | 리포트 생성 | implemented | JSON/PDF API integration + browser download E2E verified | 다중 페이지 회귀셋 확장 필요 |
-| RAG | 5개 컬렉션 | implemented | read/write verified | 실제 검증 코퍼스 없음 |
-| RAG | Hybrid Search | implemented | pre-analysis synthetic grounding + verified evidence gate verified | 실제 검증 코퍼스 없음, hashing vector는 데모 전용 |
+| RAG | 5개 컬렉션 | implemented | read/write + 공식 법령 7개 chunk ingest verified | 심결·판례·분쟁·조항패턴 verified corpus 미확보 |
+| RAG | Hybrid Search | implemented | local hashing + local MiniLM 각각 7-query Hit@3 1.0/MRR 1.0, provider mismatch gate verified | 소규모 개발 평가이며 블라인드 전문가 평가 필요 |
 | Data | PostgreSQL | implemented | local process read/write + idempotent migration verified | Alembic 전환 여부 미결정 |
 | Data | Redis | implemented | local Redis success E2E + real Redis retry x2/DLQ/needs_review verified | 네트워크 단절·복구 시나리오 추가 필요 |
-| Data | Data Pipeline | implemented | manifest/ingest/index verified | 합성 3건만 적재 |
+| Data | Data Pipeline | implemented | source/text/corpus SHA-256 manifest + 공식 법령 7건 idempotent ingest verified | 수집 자동화·원문 변경 감지·나머지 4개 corpus 확대 필요 |
 | Data | Encrypted file storage | implemented | Fernet round-trip + plaintext absence verified | 운영 키 회전·외부 KMS 미구현 |
 | Data | Audit / retention | implemented | lifecycle audit + document TTL + 365-day audit expiry + token-protected query verified | 관리자 조회 UI 미구현 |
 | Infra | Docker Compose | implemented | pending | Docker·Colima 미설치 |

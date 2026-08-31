@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 
 from app.vectorstore.client import COLLECTION_NAMES, ensure_collections, get_chroma_client
-from app.vectorstore.embedding import embed
+from app.vectorstore.embedding import SUPPORTED_PROVIDERS, embedding_metadata, upsert_embedding
 from app.vectorstore.manifest import validate_manifest
 
 REQUIRED_RECORD_FIELDS = {
@@ -22,9 +22,10 @@ def main() -> int:
     parser.add_argument("manifest", type=Path)
     parser.add_argument("records", type=Path)
     parser.add_argument("--schema", type=Path, default=Path("../research/manifest.schema.json"))
+    parser.add_argument("--embedding-provider", choices=SUPPORTED_PROVIDERS)
     args = parser.parse_args()
     manifest = validate_manifest(args.manifest, args.schema)
-    ensure_collections()
+    ensure_collections(args.embedding_provider)
     client = get_chroma_client()
     counts = {"add": 0, "update": 0, "skip": 0, "conflict": 0}
 
@@ -44,9 +45,7 @@ def main() -> int:
         collection = client.get_collection(record["corpus_type"])
         existing = collection.get(ids=[stable_id], include=["metadatas"])
         metadata = {key: value for key, value in record.items() if key != "text"}
-        metadata["embedding_provider"] = "local_hashing"
-        metadata["embedding_model"] = "sha256-token-v1"
-        metadata["embedding_dimension"] = 128
+        metadata.update(embedding_metadata(args.embedding_provider))
         metadata.setdefault("authority_weight", 0.5)
         # Stable IDs plus source hashes make repeated ingestion deterministic.
         if existing["ids"]:
@@ -58,7 +57,10 @@ def main() -> int:
         else:
             counts["add"] += 1
         collection.upsert(
-            ids=[stable_id], documents=[record["text"]], embeddings=[embed(record["text"])], metadatas=[metadata]
+            ids=[stable_id],
+            documents=[record["text"]],
+            metadatas=[metadata],
+            **upsert_embedding(record["text"], args.embedding_provider),
         )
     print(json.dumps(counts, ensure_ascii=False))
     return 0

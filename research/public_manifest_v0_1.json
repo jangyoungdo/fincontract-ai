@@ -1,0 +1,37 @@
+{
+  "manifest_version": "public-law-v0.1.0",
+  "generated_at": "2026-08-31T00:00:00+09:00",
+  "cutoff_date": "2026-08-31",
+  "status": "verified",
+  "known_limitations": [
+    "법률 전문가의 개별 조항 해석 검토가 아니라 출처·버전·재이용 조건을 확인한 소프트웨어용 근거 코퍼스다.",
+    "약관법 7개 조문만 포함하며 공정위 심결, 판례, 분쟁조정 사례 및 표준약관은 포함하지 않는다.",
+    "검색 평가는 소규모 개발용 relevance judgment이며 법률 분석 정확도를 입증하지 않는다."
+  ],
+  "datasets": [
+    {
+      "dataset_id": "korean-act-on-regulation-of-terms-2024-selected",
+      "corpus_type": "statutes",
+      "source_name": "국가법령정보센터 약관의 규제에 관한 법률",
+      "source_url": "https://www.law.go.kr/LSW/lsLinkCommonInfo.do?chrClsCd=010202&lsJoLnkSeq=1020364703",
+      "authority": "대한민국 국가법령정보센터",
+      "collection_method": "2026-08-31 공식 조문정보 페이지와 시행일을 수동 대조하고 계약 위험 탐지 관련 조문 단위로 축약 적재",
+      "inclusion_criteria": ["시행 2024-08-07 현행 조문", "계약 조항의 불공정성·면책·손해배상·해지·이행·고객 권리·관할 위험과 직접 관련된 조문"],
+      "exclusion_criteria": ["개별 사건 해석", "출처 또는 재배포 조건이 불명확한 2차 자료", "이번 위험 규칙과 직접 관련 없는 조문"],
+      "raw_count": 7,
+      "deduplicated_count": 7,
+      "accepted_count": 7,
+      "rejected_count": 0,
+      "deduplication_key": "document_id:chunk_id",
+      "content_hash": "sha256:1a81e285fb25f4e129599ea341447b6a1cfdbe371a76821ca14eca4edc51ecab",
+      "license_status": "approved",
+      "license_basis": "저작권법 제7조 제1호에 따라 법령은 보호받지 못하는 저작물에 해당",
+      "license_basis_url": "https://www.law.go.kr/lsLinkCommonInfo.do?lsJoLnkSeq=1029423769",
+      "redistribution_allowed": true,
+      "review_status": "verified",
+      "reviewer": "source-and-license-gate-v1",
+      "known_limitations": ["가독성을 위해 일부 열거 문구를 축약했으므로 법률 자문에는 공식 원문을 다시 확인해야 한다."],
+      "evaluation_exclusion": true
+    }
+  ]
+}

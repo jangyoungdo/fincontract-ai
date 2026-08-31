@@ -2,7 +2,7 @@
 
 ## 현재 단계
 
-`전체 스택 MVP 구현 완료 — 외부 데이터·Claude·컨테이너 운영 검증 대기`
+`전체 스택 MVP 구현 완료 — 공개 법령 RAG 확보, Claude·컨테이너 운영 검증 대기`
 
 ## 확보된 산출물
 
@@ -10,6 +10,7 @@
 - `prompts/project_scaffolding_prompt_v2.md`: 구현 요구사항과 승인 기준
 - `docs/`: 아키텍처, 법률 경계, 데이터 관리, 평가 기준
 - `research/`: 공개 리서치 코퍼스와 manifest를 위한 격리 영역
+- `research/public_corpus/statutes.jsonl`: 출처와 SHA-256을 고정한 약관법 7개 조문
 - `backend/`, `frontend/`: 구현 대상 모노레포 구조
 - `CONTRIBUTING.md`, `docs/git-workflow.md`: 2인 이상 협업과 worktree 운영 규칙
 - `.github/`: Pull Request 템플릿과 저장소 기본 검사
@@ -25,17 +26,17 @@
 
 - 불공정약관 관련 자료 후보 641건의 원본과 집계 단위
 - 분쟁사례 후보 16건의 원본과 포함 기준
-- 각 자료의 라이선스 및 재배포 가능 여부
+- 심결·판례·분쟁사례·표준약관 자료의 개별 라이선스 및 재배포 가능 여부
 - 8개 규칙의 법률 전문가 검토 여부
 - 실제 Claude API의 배포 환경별 보존 정책
 
 ## 다음 검증 단계
 
-1. 첫 대상 공개 약관의 출처·라이선스 manifest 검증
+1. 공정위 심결·판례·분쟁사례의 재배포 조건을 개별 확인하고 코퍼스를 확대
 2. 규칙 작성 자료와 분리된 전문가 검토 평가셋 구축
 3. 실험 A/C/D 실제 기준선과 검토자 동의율 측정
 4. 승인된 Claude 키로 structured output 연결 검증
-5. Docker 런타임에서 전체 Compose와 Redis 장애 주입 E2E 실행
+5. Docker 런타임에서 전체 Compose와 네트워크 단절·복구 E2E 실행
 6. 운영 KMS 키 회전과 관리자 감사 UI 범위 결정
 
 구현 단계가 완료될 때마다 이 문서의 상태와 검증 결과를 갱신합니다.
