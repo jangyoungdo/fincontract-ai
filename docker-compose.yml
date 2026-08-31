@@ -1,0 +1,80 @@
+services:
+  postgres:
+    image: postgres:16.10-alpine
+    environment:
+      POSTGRES_DB: fincontract
+      POSTGRES_USER: fincontract
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-development-only}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fincontract -d fincontract"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:8.2-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  chroma:
+    image: chromadb/chroma:1.5.9
+    ports:
+      - "8001:8000"
+    volumes:
+      - chroma-data:/data
+    healthcheck:
+      test: ["CMD", "bash", "-c", "</dev/tcp/127.0.0.1/8000"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    build: ./backend
+    environment:
+      APP_ENV: development
+      FRONTEND_ORIGIN: http://localhost:3000
+      DATABASE_URL: postgresql+psycopg://fincontract:${POSTGRES_PASSWORD:-local-development-only}@postgres:5432/fincontract
+      CHROMA_MODE: http
+      CHROMA_HOST: chroma
+      CHROMA_PORT: 8000
+      USE_REDIS: "true"
+      REDIS_URL: redis://redis:6379/0
+      LLM_PROVIDER: fake
+      UPLOAD_DIR: /data/uploads
+      REPORT_DIR: /data/reports
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      chroma: {condition: service_healthy}
+    ports:
+      - "8000:8000"
+    volumes:
+      - upload-data:/data/uploads
+      - report-data:/data/reports
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready')"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_BASE: http://localhost:8000
+    depends_on:
+      backend: {condition: service_healthy}
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres-data:
+  chroma-data:
+  upload-data:
+  report-data:

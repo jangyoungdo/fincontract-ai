@@ -18,6 +18,21 @@ jobs:
         run: |
           python -m json.tool research/manifest.schema.json >/dev/null
           python -m json.tool research/research_manifest.example.json >/dev/null
+          python -m json.tool research/demo_manifest.json >/dev/null
+
+      - name: Backend tests
+        run: |
+          python3.12 -m venv backend/.venv
+          backend/.venv/bin/pip install -e 'backend[dev]'
+          make test-backend
+
+      - name: Frontend tests and build
+        run: |
+          cd frontend
+          npm ci
+          npm run lint
+          npm test
+          npm run build
 
       - name: Validate collaboration scripts
         run: |
