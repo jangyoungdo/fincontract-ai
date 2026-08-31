@@ -49,6 +49,7 @@ services:
       UPLOAD_DIR: /data/uploads
       REPORT_DIR: /data/reports
       DOCUMENT_ENCRYPTION_KEY: ${DOCUMENT_ENCRYPTION_KEY:?set DOCUMENT_ENCRYPTION_KEY}
+      ADMIN_AUDIT_TOKEN: ${ADMIN_AUDIT_TOKEN:-}
     depends_on:
       postgres: {condition: service_healthy}
       redis: {condition: service_healthy}

@@ -5,8 +5,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.health import router as health_router
+from app.api.admin import router as admin_router
 from app.api.documents import router as documents_router
+from app.api.health import router as health_router
 from app.config import get_settings
 from app.models import get_engine, upgrade_database
 
@@ -27,7 +28,8 @@ app.add_middleware(
     allow_origins=[settings.frontend_origin],
     allow_credentials=False,
     allow_methods=["GET", "POST", "DELETE"],
-    allow_headers=["Content-Type", "Idempotency-Key"],
+    allow_headers=["Content-Type", "Idempotency-Key", "X-Admin-Token"],
 )
+app.include_router(admin_router)
 app.include_router(health_router)
 app.include_router(documents_router)
