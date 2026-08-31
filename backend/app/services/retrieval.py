@@ -5,11 +5,15 @@ from collections import Counter
 from typing import Any
 
 from app.vectorstore.client import COLLECTION_NAMES, get_chroma_client
-from app.vectorstore.embedding import embed, tokenize
+from app.vectorstore.embedding import provider_name, query_embedding, tokenize
 
 
 class HybridRetriever:
     """Merge deterministic vector, lexical, and source-authority relevance signals."""
+
+    def __init__(self, embedding_provider: str | None = None) -> None:
+        """Pin one provider for both query vectors and indexed collection metadata."""
+        self.embedding_provider = provider_name(embedding_provider)
 
     def search(self, query: str, top_k: int = 5) -> list[dict[str, Any]]:
         """Search all legal collections and return unique, ranked evidence records."""
@@ -20,10 +24,19 @@ class HybridRetriever:
             collection = client.get_or_create_collection(collection_name)
             if collection.count() == 0:
                 continue
+            if (collection.metadata or {}).get("embedding_provider") != self.embedding_provider:
+                raise ValueError(
+                    f"Collection {collection_name} embedding provider does not match "
+                    f"{self.embedding_provider}"
+                )
+            # Retrieve a wider vector candidate pool before lexical reranking.
+            # Limiting this stage to top_k prevents a strong exact-text match from
+            # ever reaching BM25 when the semantic model ranks it slightly lower.
+            candidate_count = min(max(top_k * 4, 20), collection.count())
             result = collection.query(
-                query_embeddings=[embed(query)],
-                n_results=min(top_k, collection.count()),
+                n_results=candidate_count,
                 include=["documents", "metadatas", "distances"],
+                **query_embedding(query, self.embedding_provider),
             )
             documents = result["documents"][0]
             metadatas = result["metadatas"][0]

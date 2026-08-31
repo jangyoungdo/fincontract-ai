@@ -1,4 +1,4 @@
-.PHONY: setup-backend setup-frontend test-backend test-frontend frontend-check api-check e2e failure-e2e migrate retention run-worker run-backend run-frontend infra-check ingest-demo verify-index
+.PHONY: setup-backend setup-frontend test-backend test-frontend frontend-check api-check e2e failure-e2e migrate retention run-worker run-backend run-frontend infra-check ingest-demo ingest-public evaluate-public verify-index
 
 PYTHON := backend/.venv/bin/python
 
@@ -45,6 +45,12 @@ infra-check:
 
 ingest-demo:
 	cd backend && .venv/bin/python scripts/ingest_corpus.py ../research/demo_manifest.json ../research/demo_corpus/clause_patterns.jsonl
+
+ingest-public:
+	cd backend && .venv/bin/python scripts/ingest_corpus.py ../research/public_manifest_v0_1.json ../research/public_corpus/statutes.jsonl
+
+evaluate-public:
+	cd backend && .venv/bin/python scripts/evaluate_retrieval.py tests/fixtures/retrieval_eval_public_v0_1.jsonl --top-k 3 --min-hit-rate 1 --min-mrr 0.8
 
 verify-index:
 	cd backend && .venv/bin/python scripts/verify_index.py

@@ -21,6 +21,8 @@
       "deduplication_key": "document_id:chunk_id",
       "content_hash": "synthetic-demo-v1",
       "license_status": "approved",
+      "license_basis": "프로젝트 내부에서 직접 작성한 합성 소프트웨어 테스트 fixture",
+      "license_basis_url": "https://example.invalid/fincontract/synthetic/license",
       "redistribution_allowed": true,
       "review_status": "verified",
       "reviewer": "software-test-fixture",

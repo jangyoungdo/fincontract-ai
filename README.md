@@ -15,7 +15,8 @@
 - PostgreSQL 메타데이터, Redis worker 재시도·격리, ChromaDB 5개 컬렉션 구현
 - Fernet 원문 암호화, 문서 TTL, 감사 로그·만료와 관리자 보호 조회 구현
 - fake provider 전체 흐름과 Claude structured output 라우팅을 분리하고 외부 전송은 opt-in으로 제한
-- 백엔드 45개 테스트와 프론트엔드 단위 테스트·프로덕션 빌드 검증
+- 국가법령정보센터 약관법 7개 조문과 출처·hash manifest, 로컬 검색 평가 구현
+- 백엔드 테스트와 프론트엔드 단위 테스트·프로덕션 빌드 검증
 - 리서치 통계 641건·16건은 근거 manifest 검증 전까지 후보 수로만 관리
 
 상세 상태와 다음 작업은 [PROJECT_STATUS.md](PROJECT_STATUS.md)를 참고하세요.
@@ -122,7 +123,8 @@ Docker가 없는 환경에서도 Backend와 Frontend를 각각 검증할 수 있
 make setup-backend
 make setup-frontend
 make test-backend
-make ingest-demo
+make ingest-public
+make evaluate-public
 make verify-index
 make frontend-check
 make e2e
@@ -139,7 +141,7 @@ make run-backend
 make run-frontend
 ```
 
-그 다음 `http://localhost:3000`에서 TXT, PDF 또는 DOCX를 업로드합니다. 현재 실제 법률 코퍼스와 Claude는 연결하지 않았으므로 화면의 근거와 분석은 합성·mock 상태를 명확히 표시합니다.
+그 다음 `http://localhost:3000`에서 TXT, PDF 또는 DOCX를 업로드합니다. 공개 법령 코퍼스는 약관법 7개 조문으로 제한되어 있고 실제 Claude 연결은 기본적으로 비활성화되어 있으므로, 화면은 근거 범위와 fake-provider 분석 상태를 구분해 표시합니다.
 
 Docker 런타임이 준비된 경우 다음 명령으로 PostgreSQL, Redis, ChromaDB, Backend와 Frontend를 함께 기동합니다.
 

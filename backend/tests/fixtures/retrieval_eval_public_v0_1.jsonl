@@ -1,0 +1,7 @@
+{"case_id":"unfair-general","query":"고객에게 예상하기 어려운 부당하게 불리한 약관","expected_evidence_ids":["act-terms-regulation-2024:article-6"]}
+{"case_id":"liability-waiver","query":"사업자의 중대한 과실 책임과 손해배상을 면책","expected_evidence_ids":["act-terms-regulation-2024:article-7"]}
+{"case_id":"excessive-damages","query":"과도한 지연 손해금과 손해배상액","expected_evidence_ids":["act-terms-regulation-2024:article-8"]}
+{"case_id":"termination-renewal","query":"고객 해지권 제한과 묵시적 자동 갱신","expected_evidence_ids":["act-terms-regulation-2024:article-9"]}
+{"case_id":"unilateral-change","query":"사업자가 급부 내용을 일방적으로 변경하거나 중지","expected_evidence_ids":["act-terms-regulation-2024:article-10"]}
+{"case_id":"acceleration","query":"고객의 기한의 이익을 상당한 이유 없이 박탈","expected_evidence_ids":["act-terms-regulation-2024:article-11"]}
+{"case_id":"jurisdiction","query":"사업자 소재지 법원 전속 재판관할과 입증책임","expected_evidence_ids":["act-terms-regulation-2024:article-14"]}

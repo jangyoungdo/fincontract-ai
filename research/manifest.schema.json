@@ -40,6 +40,8 @@
           "rejected_count",
           "deduplication_key",
           "license_status",
+          "license_basis",
+          "license_basis_url",
           "redistribution_allowed",
           "review_status"
         ],
@@ -67,6 +69,8 @@
           "deduplication_key": {"type": "string", "minLength": 1},
           "content_hash": {"type": "string"},
           "license_status": {"enum": ["unknown", "reviewing", "approved", "restricted"]},
+          "license_basis": {"type": "string", "minLength": 1},
+          "license_basis_url": {"type": "string", "format": "uri"},
           "redistribution_allowed": {"type": ["boolean", "null"]},
           "review_status": {"enum": ["unverified", "reviewing", "verified", "rejected"]},
           "reviewer": {"type": ["string", "null"]},
@@ -77,4 +81,3 @@
     }
   }
 }
-
