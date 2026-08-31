@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     document_ttl_hours: int = 24
     document_encryption_key: str = Field(default="", repr=False)
     admin_audit_token: str = Field(default="", repr=False)
+    audit_retention_days: int = 365
     retention_interval_seconds: int = 300
 
 
