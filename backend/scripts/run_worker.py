@@ -11,10 +11,13 @@ if __name__ == "__main__":
     logger = logging.getLogger("fincontract.worker")
     redis_client = get_redis()
     logger.info("worker started; listening on %s", QUEUE_NAME)
-    while True:
-        message = redis_client.blpop(QUEUE_NAME, timeout=5)
-        if message:
-            _, analysis_id = message
-            logger.info("processing analysis_id=%s", analysis_id)
-            process_analysis(analysis_id, redis_client)
-            logger.info("finished analysis_id=%s", analysis_id)
+    try:
+        while True:
+            message = redis_client.blpop(QUEUE_NAME, timeout=5)
+            if message:
+                _, analysis_id = message
+                logger.info("processing analysis_id=%s", analysis_id)
+                process_analysis(analysis_id, redis_client)
+                logger.info("finished analysis_id=%s", analysis_id)
+    except KeyboardInterrupt:
+        logger.info("worker stopped")
