@@ -120,6 +120,7 @@ Infrastructure         Docker Compose · CI · 비밀정보 관리 · 관측성
 - [데이터 거버넌스](docs/data-governance.md)
 - [평가 기준](docs/evaluation.md)
 - [실험 운영 가이드](docs/experiments.md)
+- [에이전트 모델·토큰 라우팅](docs/model-routing.md)
 - [기여 가이드](CONTRIBUTING.md)
 - [Git 협업 및 worktree 운영](docs/git-workflow.md)
 - [리서치 자료 준비 안내](research/README.md)
