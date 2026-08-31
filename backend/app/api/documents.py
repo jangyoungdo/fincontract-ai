@@ -7,16 +7,16 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, File, HTTPException, Response, UploadFile, status
-from sqlalchemy import select
 
 from app.config import get_settings
 from app.models import AnalysisRecord, DocumentRecord, get_session_factory
 from app.models.schemas import AnalysisRequest, AnalysisResponse, DeleteResponse, DocumentResponse
-from app.services.analysis_pipeline import DocumentAnalysisPipeline
 from app.services.analysis_jobs import enqueue_analysis, get_progress, get_redis
+from app.services.analysis_pipeline import DocumentAnalysisPipeline
+from app.services.audit import add_audit_event
+from app.services.encrypted_storage import read_encrypted, write_encrypted
 from app.services.file_validation import validate_file
 from app.services.text_extraction import extract_text
-
 
 router = APIRouter(prefix="/api/v1", tags=["documents"])
 
@@ -31,14 +31,13 @@ async def upload_document(file: UploadFile = File(...)) -> DocumentResponse:
     data = await file.read(settings.max_upload_bytes + 1)
     try:
         validated = validate_file(file.filename or "", file.content_type, data, settings.max_upload_bytes)
-        text = extract_text(data, validated.extension)
+        extract_text(data, validated.extension)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     document_id = str(uuid.uuid4())
-    storage_path = settings.upload_dir / f"{document_id}{validated.extension}"
-    storage_path.parent.mkdir(parents=True, exist_ok=True)
-    storage_path.write_bytes(data)
+    storage_path = settings.upload_dir / f"{document_id}{validated.extension}.enc"
+    write_encrypted(storage_path, data)
     now = datetime.now(timezone.utc)
     document = DocumentRecord(
         id=document_id,
@@ -53,6 +52,7 @@ async def upload_document(file: UploadFile = File(...)) -> DocumentResponse:
     )
     with get_session_factory()() as session:
         session.add(document)
+        add_audit_event(session, "document_uploaded", document_id=document_id)
         session.commit()
     return _document_response(document)
 
@@ -78,6 +78,7 @@ def delete_document(document_id: str) -> DeleteResponse:
         document.status = "deleted"
         document.masked_text = None
         document.deleted_at = datetime.now(timezone.utc)
+        add_audit_event(session, "document_deleted", document_id=document_id)
         session.commit()
     return DeleteResponse(id=document_id, status="deleted")
 
@@ -90,8 +91,8 @@ def create_analysis(document_id: str, request: AnalysisRequest, response: Respon
         document = session.get(DocumentRecord, document_id)
         if not document or document.deleted_at:
             raise HTTPException(status_code=404, detail="문서를 찾을 수 없습니다.")
-        data = Path(document.storage_path).read_bytes()
-        extension = Path(document.storage_path).suffix
+        data = read_encrypted(Path(document.storage_path))
+        extension = Path(document.original_filename).suffix.lower()
         text = extract_text(data, extension)
         record = AnalysisRecord(
             id=analysis_id,
@@ -101,6 +102,9 @@ def create_analysis(document_id: str, request: AnalysisRequest, response: Respon
             experiment_arm=request.experiment_arm,
         )
         session.add(record)
+        add_audit_event(
+            session, "analysis_created", document_id=document_id, analysis_id=analysis_id
+        )
         session.flush()
         if settings.use_redis:
             try:
@@ -124,10 +128,16 @@ def create_analysis(document_id: str, request: AnalysisRequest, response: Respon
             record.disposition = result["disposition"]
             record.result_json = json.dumps(result, ensure_ascii=False)
             record.completed_at = datetime.now(timezone.utc)
+            add_audit_event(
+                session, "analysis_completed", document_id=document_id, analysis_id=analysis_id
+            )
         except Exception:
             record.status = "failed"
             record.disposition = "needs_review"
             record.error_code = "ANALYSIS_FAILED"
+            add_audit_event(
+                session, "analysis_failed", document_id=document_id, analysis_id=analysis_id
+            )
         session.commit()
         return AnalysisResponse(
             id=record.id,

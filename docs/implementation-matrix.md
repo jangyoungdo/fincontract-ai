@@ -20,6 +20,8 @@
 | Data | PostgreSQL | implemented | local process read/write + idempotent migration verified | Alembic 전환 여부 미결정 |
 | Data | Redis | implemented | local Redis worker E2E (`queued→completed`) verified | 재시도·DLQ 코드 구현, 실패 E2E 추가 필요 |
 | Data | Data Pipeline | implemented | manifest/ingest/index verified | 합성 3건만 적재 |
+| Data | Encrypted file storage | implemented | Fernet round-trip + plaintext absence verified | 운영 키 회전·외부 KMS 미구현 |
+| Data | Audit / retention | implemented | lifecycle audit + TTL deletion verified | 관리자 조회 UI·감사 보존 만료 미구현 |
 | Infra | Docker Compose | implemented | pending | Docker·Colima 미설치 |
 
 ## 검증 단계

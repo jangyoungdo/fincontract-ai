@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     report_dir: Path = Path("./storage/reports")
     max_upload_bytes: int = 10_485_760
     document_ttl_hours: int = 24
+    document_encryption_key: str = Field(default="", repr=False)
+    retention_interval_seconds: int = 300
 
 
 @lru_cache
