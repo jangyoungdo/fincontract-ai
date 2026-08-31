@@ -1,0 +1,50 @@
+name: public-safety
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  repository-history-safety:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reject tracked private and generated files
+        shell: bash
+        run: |
+          set -euo pipefail
+          prohibited='(^|/)(\.env($|\.)|.*\.(pem|key|p12|pfx|jks|keystore)$|id_rsa|credentials|secrets?)'
+          generated='(^|/)(backend/storage|chroma_data|postgres_data|redis_data|node_modules|\.next)/'
+          ! git log --all --name-only --format= | sort -u | grep -E -i "$prohibited" | grep -v '^\.env\.example$'
+          ! git log --all --name-only --format= | sort -u | grep -E "$generated"
+
+      - name: Scan Git history for high-confidence secret formats
+        shell: bash
+        run: |
+          set -euo pipefail
+          pattern='(AKIA[0-9A-Z]{16}|sk-ant-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----)'
+          findings="$(for commit in $(git rev-list --all); do
+            git grep -Il -E "$pattern" "$commit" -- ':!*.lock' 2>/dev/null || true
+          done | sort -u)"
+          if [[ -n "$findings" ]]; then
+            printf 'Potential secret patterns found in:\n%s\n' "$findings"
+            exit 1
+          fi
+
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
