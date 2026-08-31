@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { Analysis, deleteDocument, uploadAndAnalyze, waitForAnalysis } from "@/lib/api";
+import { Analysis, deleteDocument, reportPdfUrl, uploadAndAnalyze, waitForAnalysis } from "@/lib/api";
 
 const stageLabels = ["문서 확인", "개인정보 보호", "위험 신호 탐색", "근거·결과 검토"];
 
@@ -50,13 +50,13 @@ export function AnalysisWorkspace() {
     </section>
 
     {analysis && <section aria-live="polite">
-      <div className="panel summary"><div><span>상태</span><b>{analysis.disposition}</b></div><div><span>조항</span><b>{analysis.result?.clause_count ?? 0}</b></div><div><span>검토 신호</span><b>{analysis.result?.findings.length ?? 0}</b></div><button className="secondary" onClick={remove}>원문·결과 삭제</button></div>
+      <div className="panel summary"><div><span>상태</span><b>{analysis.disposition}</b></div><div><span>조항</span><b>{analysis.result?.clause_count ?? 0}</b></div><div><span>검토 신호</span><b>{analysis.result?.findings.length ?? 0}</b></div>{analysis.status === "completed" && <a className="report-link" href={reportPdfUrl(analysis.id)} download>PDF 리포트</a>}<button className="secondary" onClick={remove}>원문·결과 삭제</button></div>
       {(analysis.result?.warnings ?? []).map(warning => <p className="warning" key={warning}>{warning}</p>)}
       {(analysis.result?.findings ?? []).map(finding => <article className="finding" key={finding.finding_id}>
         <header><div><span className="tag">{finding.rule_signal.signal_strength}</span><h3>{finding.rule_signal.category}</h3></div><span>검증 {finding.verification.status}</span></header>
         <div className="columns"><div><h4>마스킹된 조항</h4><blockquote>{finding.source.masked_text}</blockquote><p>{finding.assessment?.summary ?? finding.rule_signal.rationale}</p></div><div><h4>법적 근거 후보</h4>{finding.evidence.map(item => <div className="evidence" key={item.evidence_id}><b>{item.title}</b><small>{item.status} · {item.authority}</small></div>)}<h4>확인 질문</h4><ul>{(finding.assessment?.review_questions ?? []).map(question => <li key={question}>{question}</li>)}</ul></div></div>
       </article>)}
-      <section className="panel limitations"><h2>데이터 제공 범위</h2><p><b>원문 뷰어</b>는 개인정보를 마스킹한 검토 조항만 표시합니다. 원문 전체나 마스킹 전 텍스트는 화면·검색·외부 모델로 전송하지 않습니다.</p><p><b>은행 비교</b>는 검증된 공개·허가 비교 데이터가 아직 없어 순위·추천·비교 결과를 제공하지 않습니다.</p><p><b>리포트</b>는 현재 JSON 형식의 검토 보조 자료이며, 법률 판단이나 상품 추천이 아닙니다.</p></section>
+      <section className="panel limitations"><h2>데이터 제공 범위</h2><p><b>원문 뷰어</b>는 개인정보를 마스킹한 검토 조항만 표시합니다. 원문 전체나 마스킹 전 텍스트는 화면·검색·외부 모델로 전송하지 않습니다.</p><p><b>은행 비교</b>는 검증된 공개·허가 비교 데이터가 아직 없어 순위·추천·비교 결과를 제공하지 않습니다.</p><p><b>리포트</b>는 PDF와 JSON 형식의 검토 보조 자료이며, 법률 판단이나 상품 추천이 아닙니다.</p></section>
     </section>}
     {!analysis && <section className="panel limitations"><h2>은행 비교</h2><p>검증된 공개·허가 비교 데이터가 아직 없습니다. 따라서 순위나 추천은 표시하지 않습니다.</p></section>}
   </main>;

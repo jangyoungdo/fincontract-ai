@@ -14,7 +14,7 @@
 | Backend | 조항 분리 | implemented | integration verified | 복잡한 표·OCR 제외 |
 | Backend | 위험도 판정 | prototype | 8-rule unit verified | 합성 데이터, 전문가 검토 미완료 |
 | Backend | LLM 분석 | partial | fake-provider E2E, structured-output contract, opt-in/fail-closed verified | 실제 Claude 키·연결 미검증 |
-| Backend | 리포트 생성 | implemented | JSON/PDF API integration verified | 브라우저 다운로드 E2E 추가 필요 |
+| Backend | 리포트 생성 | implemented | JSON/PDF API integration + frontend download build verified | 실제 브라우저 다운로드 E2E 추가 필요 |
 | RAG | 5개 컬렉션 | implemented | read/write verified | 실제 검증 코퍼스 없음 |
 | RAG | Hybrid Search | implemented | pre-analysis synthetic grounding + verified evidence gate verified | 실제 검증 코퍼스 없음, hashing vector는 데모 전용 |
 | Data | PostgreSQL | implemented | local process read/write + idempotent migration verified | Alembic 전환 여부 미결정 |
