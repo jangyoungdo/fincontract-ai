@@ -58,7 +58,8 @@ ANTHROPIC_DEEP_MODEL=<현재 사용 가능한 Opus 계열 모델 ID>
 OpenAI는 `make openai-check`로 합성 데이터 1건만 전송합니다. Responses API 요청은
 `store=false`와 JSON Schema 형식을 사용합니다. 출력 본문·prompt·API 키는 로그에 남기지 않고
 모델, 응답 ID, 토큰 수, 지연시간, schema 및 근거 검증 상태만 출력합니다. 이 호출은 이미 탐지된
-규칙 결과의 설명 보강만 시험하므로 규칙·의미 탐지 점수의 향상을 뜻하지 않습니다.
+규칙 결과의 설명 보강만 시험합니다. 별도 `make openai-context-check`는 합성 조항을 이용해
+규칙 미매핑 문맥 후보 생성을 시험합니다.
 
 테스트 전용 키와 합성 데이터만 사용해 `make claude-check`를 실행합니다. 이 명령은 한 번의
 bounded structured-output 요청만 보내며 prompt·응답 본문·키를 출력하지 않고 모델,

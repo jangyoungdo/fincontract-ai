@@ -40,6 +40,11 @@ const warningLabels: Record<string, string> = {
   LLM_ENRICHMENT_FAILED: "설명 보강 미실행: 보강 작업을 완료하지 못했으며 규칙 탐지 결과는 그대로 보존되었습니다.",
   SEMANTIC_MODEL_FALLBACK: "고정 E5 모델을 사용할 수 없어 개발용 로컬 fallback이 사용되었습니다.",
   EXPERIMENT_ARM_DEPRECATED: "이전 A/D 요청값은 더 이상 분석 동작을 선택하지 않습니다.",
+  OPENAI_CONTEXT_REVIEW_FAILED: "OpenAI 문맥 검토를 완료하지 못했습니다. 규칙 및 로컬 의미 결과는 그대로 보존되었습니다.",
+  OPENAI_CONTEXT_REVIEW_TRUNCATED: "문맥 검토 호출 한도에 따라 일부 긴 조항은 OpenAI 추가 검토에서 제외되었습니다.",
+  OPENAI_CONTEXT_OUTPUT_REJECTED: "원문 인용이나 분류 검증을 통과하지 못한 OpenAI 후보는 결과에서 제외했습니다.",
+  LLM_RATE_LIMITED: "OpenAI 호출 한도에 도달해 문맥 검토를 생략했습니다.",
+  LLM_QUOTA_EXCEEDED: "OpenAI API 사용 한도로 문맥 검토를 생략했습니다.",
 };
 
 function renderSpan(text: string, span: [number, number], key: string): ReactNode {
@@ -113,13 +118,14 @@ function CandidateCard({ candidate, analysisId }: { candidate: CandidateFinding;
   const clause = candidate.clause.label ?? `제${candidate.clause.number}조`;
   const page = candidate.source.page_number ? ` · PDF ${candidate.source.page_number}페이지` : "";
   const previews = candidate.source.preview_status === "available" ? candidate.source.preview_ids ?? [] : [];
+  const isOpenAI = candidate.review_method === "openai_context";
   return <article className="finding candidate">
-    <header><div><span className="tag">의미 검토 후보 · {candidate.confidence}</span><h3>{clause}{candidate.clause.subclause_label ? ` · ${candidate.clause.subclause_label}` : ""}{page} · {candidate.name}</h3></div><span>규칙 미매핑</span></header>
+    <header><div><span className="tag">{isOpenAI ? "AI 문맥 검토 후보" : "로컬 의미 검토 후보"} · {candidate.confidence}</span><h3>{clause}{candidate.clause.subclause_label ? ` · ${candidate.clause.subclause_label}` : ""}{page} · {candidate.name}</h3></div><span>규칙 미매핑</span></header>
     <p className="finding-summary">{candidate.summary_sentence}</p>
     <section className="finding-source"><h4>후보 근거</h4>{previews.map(previewId => <img className="source-preview" key={previewId} src={sourcePreviewUrl(analysisId, previewId)} alt={`${candidate.source.page_number ?? "문서"}페이지의 개인정보가 제거된 후보 문구`} />)}{previews.length === 0 && <blockquote>{candidate.source.masked_text}</blockquote>}</section>
     <section><h4>확인 질문</h4><ul>{candidate.review_questions.map(question => <li key={question}>{question}</li>)}</ul></section>
-    <details className="detail-block"><summary>로컬 의미 모델 상세</summary><p>유사도 {candidate.similarity_score.toFixed(3)}{candidate.similarity_margin !== undefined ? ` · 안전 예문 대비 ${candidate.similarity_margin.toFixed(3)}` : ""} · {candidate.model_id}</p><small>리비전 {candidate.model_revision}</small></details>
-    <small>이 항목은 결정론 규칙 탐지가 아닌 로컬 분류 후보이며, 법률 판단이나 확정 신호가 아닙니다.</small>
+    <details className="detail-block"><summary>{isOpenAI ? "OpenAI 문맥 검토 상세" : "로컬 의미 모델 상세"}</summary>{isOpenAI ? <><p>{candidate.rationale}</p>{(candidate.counter_considerations ?? []).length > 0 && <p>반대 사정: {(candidate.counter_considerations ?? []).join(" · ")}</p>}<small>{candidate.model_id} · {candidate.model_revision}</small></> : <><p>유사도 {(candidate.similarity_score ?? 0).toFixed(3)}{candidate.similarity_margin !== undefined ? ` · 안전 예문 대비 ${candidate.similarity_margin.toFixed(3)}` : ""} · {candidate.model_id}</p><small>리비전 {candidate.model_revision}</small></>}</details>
+    <small>이 항목은 결정론 규칙 탐지가 아닌 추가 검토 후보이며, 법률 판단이나 확정 신호가 아닙니다.</small>
   </article>;
 }
 
@@ -195,7 +201,7 @@ export function AnalysisWorkspace() {
       <h2>계약서 업로드</h2><p className="muted">TXT, PDF, DOCX · 최대 10MB · 원문은 분석 후 삭제할 수 있습니다.</p>
       <form onSubmit={submit}>
         <label className="drop"><input aria-label="계약서 파일" type="file" accept=".txt,.pdf,.docx" onChange={event => setFile(event.target.files?.[0] ?? null)} /><b>{file?.name ?? "파일을 선택하세요"}</b><span>마스킹 전 원문은 외부 모델이나 ChromaDB로 보내지 않습니다.</span></label>
-        <div className="actions"><span className="muted">19개 규칙과 로컬 의미 검토를 함께 실행합니다.</span><button disabled={!file || busy}>{busy ? `${statusLabels[progressState ?? "analyzing"] ?? "분석 중"}…` : "분석 시작"}</button></div>
+        <div className="actions"><span className="muted">19개 규칙과 추가 의미 검토를 함께 실행합니다.</span><button disabled={!file || busy}>{busy ? `${statusLabels[progressState ?? "analyzing"] ?? "분석 중"}…` : "분석 시작"}</button></div>
       </form>
       {error && <section role="alert" className="error-panel"><h3>{error.message}</h3>{error.retryable && analysis && <button onClick={refresh}>상태 다시 확인</button>}<details><summary>기술 정보</summary><p>단계 {error.stage} · 코드 {error.code}{error.httpStatus ? ` · HTTP ${error.httpStatus}` : ""}</p></details></section>}
     </section>
@@ -212,10 +218,10 @@ export function AnalysisWorkspace() {
       </div>
       {analysis.result?.summary?.headline && <section className="panel document-summary"><h2>핵심 요약</h2><p>{analysis.result.summary.headline}</p></section>}
       {analysis.status === "failed" && <FailurePanel analysis={analysis} onRetry={refresh} />}
-      {analysis.disposition === "no_signal" && <section className="no-signal"><h2>검토 신호 없음</h2><p>현재 19개 규칙과 로컬 의미 검토에서 위험 신호가 탐지되지 않았습니다. 이는 계약의 안전성이나 적법성을 보장하지 않습니다.</p></section>}
+      {analysis.disposition === "no_signal" && <section className="no-signal"><h2>검토 신호 없음</h2><p>현재 19개 규칙과 추가 의미 검토에서 위험 신호가 탐지되지 않았습니다. 이는 계약의 안전성이나 적법성을 보장하지 않습니다.</p></section>}
       {(analysis.result?.warnings ?? []).map(warning => <p className="warning" key={warning}>{warningLabels[warning] ?? warning}</p>)}
       {findings.map(finding => <FindingCard finding={finding} analysisId={analysis.id} key={finding.finding_id} />)}
-      {candidateFindings.length > 0 && <section className="panel"><h2>추가 의미 검토 후보</h2><p className="muted">모든 조문을 로컬 의미 모델로 비교하되 같은 유형의 규칙 탐지와 중복되는 후보는 제외합니다.</p>{candidateFindings.map(candidate => <CandidateCard candidate={candidate} analysisId={analysis.id} key={candidate.candidate_id} />)}</section>}
+      {candidateFindings.length > 0 && <section className="panel"><h2>추가 의미 검토 후보</h2><p className="muted">로컬 의미 모델과 선택적 OpenAI 문맥 검토가 제안한 후보이며, 같은 조문·유형의 규칙 탐지와 중복되는 항목은 제외합니다.</p>{candidateFindings.map(candidate => <CandidateCard candidate={candidate} analysisId={analysis.id} key={candidate.candidate_id} />)}</section>}
       <section className="panel limitations"><h2>데이터 제공 범위</h2><p><b>원문 근거</b>는 탐지된 조항의 개인정보 제거 조각만 표시하며 문서 전문은 브라우저로 전송하지 않습니다.</p><p><b>은행 비교</b>는 검증된 공개·허가 비교 데이터가 아직 없어 순위·추천·비교 결과를 제공하지 않습니다.</p><p><b>리포트</b>는 계약 검토 보조 자료이며, 법률 판단이나 상품 추천이 아닙니다.</p></section>
     </section>}
     {!analysis && <section className="panel limitations"><h2>은행 비교</h2><p>검증된 공개·허가 비교 데이터가 아직 없습니다. 따라서 순위나 추천은 표시하지 않습니다.</p></section>}

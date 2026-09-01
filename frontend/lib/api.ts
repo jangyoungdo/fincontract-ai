@@ -78,13 +78,16 @@ export type CandidateFinding = {
   category: string;
   name: string;
   status: "semantic_review_candidate";
+  review_method?: "local_e5" | "openai_context";
   confidence: string;
-  similarity_score: number;
+  similarity_score?: number;
   similarity_margin?: number;
   model_id: string;
   model_revision: string;
   matched_prototype_ids: string[];
   review_questions: string[];
+  rationale?: string;
+  counter_considerations?: string[];
   summary_sentence: string;
   source: {
     masked_text: string;

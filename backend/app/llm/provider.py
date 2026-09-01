@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from app.config import get_settings
 
 PROMPT_VERSION = "assessment-v1"
+CONTEXT_REVIEW_PROMPT_VERSION = "context-review-v1"
 
 
 class ProviderError(RuntimeError):
@@ -54,6 +55,28 @@ class AssessmentOutput(BaseModel):
     counter_considerations: list[str] = Field(max_length=10)
     review_questions: list[str] = Field(max_length=10)
     cited_evidence_ids: list[str] = Field(min_length=1, max_length=20)
+
+
+class ContextCandidateOutput(BaseModel):
+    """One bounded review candidate tied to an exact supplied clause excerpt."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    section_id: str = Field(min_length=1, max_length=200)
+    rule_id: str = Field(min_length=1, max_length=100)
+    evidence_quote: str = Field(min_length=1, max_length=2000)
+    rationale: str = Field(min_length=1, max_length=1200)
+    review_question: str = Field(min_length=1, max_length=500)
+    confidence: Literal["low", "medium", "high"]
+    counter_considerations: list[str] = Field(max_length=5)
+
+
+class ContextReviewOutput(BaseModel):
+    """Strict document-context output; empty candidates is a valid result."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    candidates: list[ContextCandidateOutput] = Field(max_length=40)
 
 
 class FakeProvider:
@@ -199,28 +222,89 @@ class OpenAIProvider:
             "rule_signal": rule_signal,
             "evidence": evidence,
         }
+        text = self._request_structured(
+            prompt,
+            schema=AssessmentOutput.model_json_schema(),
+            schema_name="fincontract_assessment",
+            model=model,
+            max_tokens=max_tokens,
+            prompt_version=PROMPT_VERSION,
+            instructions=(
+                "You are a contract-review assistant. Return only schema-valid JSON in Korean. "
+                "Never make a final legal conclusion."
+            ),
+        )
+        try:
+            assessment = AssessmentOutput.model_validate_json(text).model_dump()
+        except (TypeError, ValueError, ValidationError) as exc:
+            raise ProviderError("LLM_SCHEMA_INVALID", retryable=False) from exc
+        return assessment
+
+    def review_context(
+        self,
+        sections: list[dict[str, str]],
+        taxonomy: list[dict[str, Any]],
+        model: str,
+        max_tokens: int = 2200,
+    ) -> dict[str, Any]:
+        """Find review candidates in masked analyzable clauses without promoting findings."""
+        prompt = {
+            "task": (
+                "각 조문의 전체 문맥을 검토하여 taxonomy에 해당할 가능성이 있는 항목만 반환하세요. "
+                "evidence_quote는 입력 조문에서 글자 하나도 바꾸지 않은 연속 문자열이어야 합니다. "
+                "명시된 section_id와 rule_id만 사용하고 정상 조항은 반환하지 마세요. "
+                "위법·적법·무효를 확정하지 마세요."
+            ),
+            "prompt_version": CONTEXT_REVIEW_PROMPT_VERSION,
+            "taxonomy": taxonomy,
+            "sections": sections,
+        }
+        text = self._request_structured(
+            prompt,
+            schema=ContextReviewOutput.model_json_schema(),
+            schema_name="fincontract_context_review",
+            model=model,
+            max_tokens=max_tokens,
+            prompt_version=CONTEXT_REVIEW_PROMPT_VERSION,
+            instructions=(
+                "You classify masked Korean contract clauses into the supplied closed taxonomy. "
+                "Return only schema-valid JSON and exact quotes from the supplied sections."
+            ),
+        )
+        try:
+            return ContextReviewOutput.model_validate_json(text).model_dump()
+        except (TypeError, ValueError, ValidationError) as exc:
+            raise ProviderError("LLM_SCHEMA_INVALID", retryable=False) from exc
+
+    def _request_structured(
+        self,
+        prompt: dict[str, Any],
+        *,
+        schema: dict[str, Any],
+        schema_name: str,
+        model: str,
+        max_tokens: int,
+        prompt_version: str,
+        instructions: str,
+    ) -> str:
         serialized_prompt = json.dumps(prompt, ensure_ascii=False)
         from app.prototype.pii import mask_pii
 
         masking = mask_pii(serialized_prompt)
         if not masking.passed or masking.replacement_count:
             raise ProviderError("OUTBOUND_PII_BLOCKED", retryable=False)
-
         payload = {
             "model": model,
             "store": False,
-            "instructions": (
-                "You are a contract-review assistant. Return only schema-valid JSON in Korean. "
-                "Never make a final legal conclusion."
-            ),
+            "instructions": instructions,
             "input": serialized_prompt,
             "max_output_tokens": max_tokens,
             "text": {
                 "format": {
                     "type": "json_schema",
-                    "name": "fincontract_assessment",
+                    "name": schema_name,
                     "strict": True,
-                    "schema": AssessmentOutput.model_json_schema(),
+                    "schema": schema,
                 }
             },
         }
@@ -241,17 +325,15 @@ class OpenAIProvider:
             raise ProviderError("LLM_UNAVAILABLE", retryable=True)
         if response.status_code >= 400:
             raise ProviderError("LLM_REQUEST_REJECTED", retryable=False)
-
         elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
         try:
             body = response.json()
             text = self._output_text(body)
-            assessment = AssessmentOutput.model_validate_json(text).model_dump()
-        except (KeyError, TypeError, ValueError, ValidationError) as exc:
+        except (KeyError, TypeError, ValueError) as exc:
             raise ProviderError("LLM_SCHEMA_INVALID", retryable=False) from exc
         usage = body.get("usage") or {}
         self._last_call = {
-            "prompt_version": PROMPT_VERSION,
+            "prompt_version": prompt_version,
             "model": body.get("model", model),
             "response_id": body.get("id"),
             "latency_ms": elapsed_ms,
@@ -259,7 +341,7 @@ class OpenAIProvider:
             "output_tokens": usage.get("output_tokens"),
             "stored": False,
         }
-        return assessment
+        return text
 
     @staticmethod
     def _output_text(body: dict[str, Any]) -> str:
