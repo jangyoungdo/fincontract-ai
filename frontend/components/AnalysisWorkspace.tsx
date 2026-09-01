@@ -9,6 +9,7 @@ import {
   deleteDocument,
   downloadReport,
   getAnalysis,
+  sourcePreviewUrl,
   uploadAndAnalyze,
   waitForAnalysis,
 } from "@/lib/api";
@@ -29,9 +30,14 @@ const dispositionLabels: Record<string, string> = {
   pending: "분석 중",
 };
 const strengthLabels: Record<string, string> = { low: "낮은 신호", medium: "중간 신호", high: "높은 신호" };
+const verificationLabels: Record<string, string> = {
+  passed: "법적 근거 확인",
+  failed: "법적 근거 추가 확인 필요",
+  not_run: "근거 검증 미실행",
+};
 const warningLabels: Record<string, string> = {
-  LLM_BUDGET_SKIPPED: "호출 예산에 따라 일부 AI 설명 보강을 생략했습니다. 규칙 탐지 결과에는 영향이 없습니다.",
-  LLM_ENRICHMENT_FAILED: "AI 설명 보강을 완료하지 못했습니다. 규칙 탐지 결과는 그대로 보존되었습니다.",
+  LLM_BUDGET_SKIPPED: "설명 보강 미실행: 호출 예산에 따라 생략됐으며 규칙 탐지 결과에는 영향이 없습니다.",
+  LLM_ENRICHMENT_FAILED: "설명 보강 미실행: 보강 작업을 완료하지 못했으며 규칙 탐지 결과는 그대로 보존되었습니다.",
   SEMANTIC_MODEL_FALLBACK: "고정 E5 모델을 사용할 수 없어 개발용 로컬 fallback이 사용되었습니다.",
   EXPERIMENT_ARM_DEPRECATED: "이전 A/D 요청값은 더 이상 분석 동작을 선택하지 않습니다.",
 };
@@ -40,28 +46,6 @@ function renderSpan(text: string, span: [number, number], key: string): ReactNod
   const [start, end] = span;
   if (start < 0 || end <= start || end > text.length) return text;
   return <>{text.slice(0, start)}<mark key={key}>{text.slice(start, end)}</mark>{text.slice(end)}</>;
-}
-
-function renderMaskedDocument(text: string, findings: Finding[]): ReactNode[] {
-  const ranges = findings
-    .filter(finding => finding.clause)
-    .map(finding => ({
-      start: finding.clause!.char_start + finding.source.match_span[0],
-      end: finding.clause!.char_start + finding.source.match_span[1],
-      id: finding.finding_id,
-    }))
-    .filter(range => range.start >= 0 && range.end > range.start && range.end <= text.length)
-    .sort((left, right) => left.start - right.start);
-  const nodes: ReactNode[] = [];
-  let cursor = 0;
-  for (const range of ranges) {
-    if (range.start < cursor) continue;
-    nodes.push(text.slice(cursor, range.start));
-    nodes.push(<mark key={range.id}>{text.slice(range.start, range.end)}</mark>);
-    cursor = range.end;
-  }
-  nodes.push(text.slice(cursor));
-  return nodes;
 }
 
 function asClientError(reason: unknown, stage: ClientApiError["stage"]): ClientApiError {
@@ -79,56 +63,41 @@ function FailurePanel({ analysis, onRetry }: { analysis: Analysis; onRetry: () =
   </section>;
 }
 
-function FindingCard({ finding }: { finding: Finding }) {
+function FindingCard({ finding, analysisId }: { finding: Finding; analysisId: string }) {
   const explanation = finding.explanation;
+  const page = finding.source.page_number ? ` · PDF ${finding.source.page_number}페이지` : "";
+  const previews = finding.source.preview_status === "available" ? finding.source.preview_ids ?? [] : [];
   return <article className="finding">
     <header>
-      <div><span className="tag">{strengthLabels[finding.rule_signal.signal_strength] ?? finding.rule_signal.signal_strength}</span><h3>{finding.clause ? `${finding.clause.label ?? `제${finding.clause.number}조`}${finding.clause.subclause_label ? ` · ${finding.clause.subclause_label}` : ""} · ` : ""}{finding.rule_signal.rule_name ?? finding.rule_signal.category}</h3></div>
-      <span>검증 {finding.verification.status}</span>
+      <div><span className="tag">{strengthLabels[finding.rule_signal.signal_strength] ?? finding.rule_signal.signal_strength}</span><h3>{finding.clause ? `${finding.clause.label ?? `제${finding.clause.number}조`}${finding.clause.subclause_label ? ` · ${finding.clause.subclause_label}` : ""}${page} · ` : ""}{finding.rule_signal.rule_name ?? finding.rule_signal.category}</h3></div>
+      <span className={`verification ${finding.verification.status}`}>{verificationLabels[finding.verification.status] ?? "근거 상태 확인 필요"}</span>
     </header>
 
+    <p className="finding-summary">{finding.summary_sentence}</p>
+
     <section className="finding-source">
-      <h4>정확히 탐지된 문구</h4>
-      <blockquote>{renderSpan(finding.source.masked_text, finding.source.match_span, `${finding.finding_id}-source`)}</blockquote>
+      <h4>실제 문서의 마스킹 원문 근거</h4>
+      {previews.map(previewId => <img className="source-preview" key={previewId} src={sourcePreviewUrl(analysisId, previewId)} alt={`${finding.source.page_number ?? "문서"}페이지의 개인정보가 제거된 탐지 문구`} />)}
+      {previews.length === 0 && <blockquote>{renderSpan(finding.source.masked_text, finding.source.match_span, `${finding.finding_id}-source`)}</blockquote>}
+      {previews.length > 0 && <details className="text-source"><summary>마스킹 텍스트로 보기</summary><blockquote>{renderSpan(finding.source.masked_text, finding.source.match_span, `${finding.finding_id}-source`)}</blockquote></details>}
     </section>
 
-    <div className="explanation-grid">
-      <section><h4>왜 문제 후보인가</h4><p>{explanation.why_flagged}</p></section>
-      <section><h4>예상되는 고객 영향</h4><p>{explanation.possible_impact}</p></section>
-    </div>
-
     <section>
-      <h4>반대 사정과 확인 조건</h4>
+      <h4>확인할 질문</h4>
       <ul>{explanation.review_points.map(point => <li key={point}>{point}</li>)}</ul>
     </section>
 
-    <section className="revision">
-      <h4>검토용 대안 조항</h4>
-      <p>{explanation.suggested_revision}</p>
-      <small>{explanation.disclaimer}</small>
-    </section>
-
-    <section>
-      <h4>법적 근거 후보</h4>
-      {finding.evidence.length === 0 && <p className="muted">검증된 근거를 검색하지 못했습니다. 법령 원문과 시행일을 별도로 확인하세요.</p>}
-      {finding.evidence.map(item => <div className="evidence" key={item.evidence_id}>
-        <b>{item.title}</b>
-        {item.quoted_excerpt && <q>{item.quoted_excerpt}</q>}
-        <small>{item.authority} · {item.status}{item.relevance_score !== undefined ? ` · 관련도 ${item.relevance_score}` : ""}</small>
-        {item.source_url && <a href={item.source_url} target="_blank" rel="noreferrer noopener">법령 원문 열기</a>}
-      </div>)}
-    </section>
-
-    {finding.assessment && <details className="detail-block">
-      <summary>AI 보충 검토 ({finding.assessment.risk_level ?? "mock"})</summary>
-      <p>{finding.assessment.summary}</p>
-      {finding.assessment.rationale && <p>{finding.assessment.rationale}</p>}
-      <h5>반대 고려사항</h5><ul>{finding.assessment.counter_considerations.map(item => <li key={item}>{item}</li>)}</ul>
-      <h5>추가 확인 질문</h5><ul>{finding.assessment.review_questions.map(item => <li key={item}>{item}</li>)}</ul>
-    </details>}
-
-    <details className="detail-block">
-      <summary>전문가용 검증 상세</summary>
+    <details className="detail-block"><summary>상세 검토</summary>
+      <div className="explanation-grid">
+        <section><h4>왜 문제 후보인가</h4><p>{explanation.why_flagged}</p></section>
+        <section><h4>예상되는 고객 영향</h4><p>{explanation.possible_impact}</p></section>
+      </div>
+      <section className="revision"><h4>검토용 대안 조항</h4><p>{explanation.suggested_revision}</p><small>{explanation.disclaimer}</small></section>
+      <section><h4>법적 근거 후보</h4>
+        {finding.evidence.length === 0 && <p className="muted">검증된 근거를 검색하지 못했습니다. 법령 원문과 시행일을 별도로 확인하세요.</p>}
+        {finding.evidence.map(item => <div className="evidence" key={item.evidence_id}><b>{item.title}</b>{item.quoted_excerpt && <q>{item.quoted_excerpt}</q>}<small>{item.authority} · {item.status}{item.relevance_score !== undefined ? ` · 관련도 ${item.relevance_score}` : ""}</small>{item.source_url && <a href={item.source_url} target="_blank" rel="noreferrer noopener">법령 원문 열기</a>}</div>)}
+      </section>
+      <h4>전문가용 검증 정보</h4>
       <dl>
         <div><dt>규칙 ID</dt><dd>{finding.rule_signal.rule_id}</dd></div>
         <div><dt>규칙 버전</dt><dd>{finding.rule_signal.rule_version ?? "미상"}</dd></div>
@@ -140,13 +109,16 @@ function FindingCard({ finding }: { finding: Finding }) {
   </article>;
 }
 
-function CandidateCard({ candidate }: { candidate: CandidateFinding }) {
+function CandidateCard({ candidate, analysisId }: { candidate: CandidateFinding; analysisId: string }) {
   const clause = candidate.clause.label ?? `제${candidate.clause.number}조`;
+  const page = candidate.source.page_number ? ` · PDF ${candidate.source.page_number}페이지` : "";
+  const previews = candidate.source.preview_status === "available" ? candidate.source.preview_ids ?? [] : [];
   return <article className="finding candidate">
-    <header><div><span className="tag">의미 검토 후보 · {candidate.confidence}</span><h3>{clause}{candidate.clause.subclause_label ? ` · ${candidate.clause.subclause_label}` : ""} · {candidate.name}</h3></div><span>규칙 미매핑</span></header>
-    <section className="finding-source"><h4>후보 근거</h4><blockquote>{candidate.source.masked_text}</blockquote></section>
-    <section><h4>로컬 의미 모델</h4><p>유사도 {candidate.similarity_score.toFixed(3)}{candidate.similarity_margin !== undefined ? ` · 안전 예문 대비 ${candidate.similarity_margin.toFixed(3)}` : ""} · {candidate.model_id}</p><small>리비전 {candidate.model_revision}</small></section>
+    <header><div><span className="tag">의미 검토 후보 · {candidate.confidence}</span><h3>{clause}{candidate.clause.subclause_label ? ` · ${candidate.clause.subclause_label}` : ""}{page} · {candidate.name}</h3></div><span>규칙 미매핑</span></header>
+    <p className="finding-summary">{candidate.summary_sentence}</p>
+    <section className="finding-source"><h4>후보 근거</h4>{previews.map(previewId => <img className="source-preview" key={previewId} src={sourcePreviewUrl(analysisId, previewId)} alt={`${candidate.source.page_number ?? "문서"}페이지의 개인정보가 제거된 후보 문구`} />)}{previews.length === 0 && <blockquote>{candidate.source.masked_text}</blockquote>}</section>
     <section><h4>확인 질문</h4><ul>{candidate.review_questions.map(question => <li key={question}>{question}</li>)}</ul></section>
+    <details className="detail-block"><summary>로컬 의미 모델 상세</summary><p>유사도 {candidate.similarity_score.toFixed(3)}{candidate.similarity_margin !== undefined ? ` · 안전 예문 대비 ${candidate.similarity_margin.toFixed(3)}` : ""} · {candidate.model_id}</p><small>리비전 {candidate.model_revision}</small></details>
     <small>이 항목은 결정론 규칙 탐지가 아닌 로컬 분류 후보이며, 법률 판단이나 확정 신호가 아닙니다.</small>
   </article>;
 }
@@ -238,13 +210,13 @@ export function AnalysisWorkspace() {
         {analysis.status === "completed" && <button className="report-link" onClick={report}>PDF 리포트</button>}
         <button className="secondary" onClick={remove}>원문·결과 삭제</button>
       </div>
+      {analysis.result?.summary?.headline && <section className="panel document-summary"><h2>핵심 요약</h2><p>{analysis.result.summary.headline}</p></section>}
       {analysis.status === "failed" && <FailurePanel analysis={analysis} onRetry={refresh} />}
       {analysis.disposition === "no_signal" && <section className="no-signal"><h2>검토 신호 없음</h2><p>현재 19개 규칙과 로컬 의미 검토에서 위험 신호가 탐지되지 않았습니다. 이는 계약의 안전성이나 적법성을 보장하지 않습니다.</p></section>}
       {(analysis.result?.warnings ?? []).map(warning => <p className="warning" key={warning}>{warningLabels[warning] ?? warning}</p>)}
-      {analysis.result?.document?.masked_text && <section className="panel source-viewer"><h2>마스킹된 전체 문서</h2><p className="muted">개인정보 치환 {analysis.result.document.pii_replacement_count}건 · 실제 탐지 문구를 강조 표시합니다.</p><pre>{renderMaskedDocument(analysis.result.document.masked_text, findings)}</pre></section>}
-      {findings.map(finding => <FindingCard finding={finding} key={finding.finding_id} />)}
-      {candidateFindings.length > 0 && <section className="panel"><h2>추가 의미 검토 후보</h2><p className="muted">모든 조문을 로컬 의미 모델로 비교하되 같은 유형의 규칙 탐지와 중복되는 후보는 제외합니다.</p>{candidateFindings.map(candidate => <CandidateCard candidate={candidate} key={candidate.candidate_id} />)}</section>}
-      <section className="panel limitations"><h2>데이터 제공 범위</h2><p><b>원문 뷰어</b>는 개인정보를 치환한 전체 텍스트만 표시합니다. 마스킹 전 텍스트는 화면·검색·외부 모델로 전송하지 않습니다.</p><p><b>은행 비교</b>는 검증된 공개·허가 비교 데이터가 아직 없어 순위·추천·비교 결과를 제공하지 않습니다.</p><p><b>리포트</b>는 계약 검토 보조 자료이며, 법률 판단이나 상품 추천이 아닙니다.</p></section>
+      {findings.map(finding => <FindingCard finding={finding} analysisId={analysis.id} key={finding.finding_id} />)}
+      {candidateFindings.length > 0 && <section className="panel"><h2>추가 의미 검토 후보</h2><p className="muted">모든 조문을 로컬 의미 모델로 비교하되 같은 유형의 규칙 탐지와 중복되는 후보는 제외합니다.</p>{candidateFindings.map(candidate => <CandidateCard candidate={candidate} analysisId={analysis.id} key={candidate.candidate_id} />)}</section>}
+      <section className="panel limitations"><h2>데이터 제공 범위</h2><p><b>원문 근거</b>는 탐지된 조항의 개인정보 제거 조각만 표시하며 문서 전문은 브라우저로 전송하지 않습니다.</p><p><b>은행 비교</b>는 검증된 공개·허가 비교 데이터가 아직 없어 순위·추천·비교 결과를 제공하지 않습니다.</p><p><b>리포트</b>는 계약 검토 보조 자료이며, 법률 판단이나 상품 추천이 아닙니다.</p></section>
     </section>}
     {!analysis && <section className="panel limitations"><h2>은행 비교</h2><p>검증된 공개·허가 비교 데이터가 아직 없습니다. 따라서 순위나 추천은 표시하지 않습니다.</p></section>}
   </main>;

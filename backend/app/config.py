@@ -32,6 +32,11 @@ class Settings(BaseSettings):
     anthropic_deep_model: str = ""
     anthropic_timeout_seconds: float = 20.0
     anthropic_sdk_max_retries: int = 0
+    openai_api_key: str = Field(default="", repr=False)
+    openai_fast_model: str = "gpt-5.6-luna"
+    openai_balanced_model: str = "gpt-5.6-luna"
+    openai_deep_model: str = "gpt-5.6-terra"
+    openai_timeout_seconds: float = 30.0
     llm_max_calls_per_analysis: int = 8
     semantic_model_enabled: bool = True
     semantic_model_required: bool = False

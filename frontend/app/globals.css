@@ -34,7 +34,9 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .summary { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
 .summary > div { display: grid; gap: 4px; }
 .summary b { font-size: 20px; }
-.source-viewer pre { white-space: pre-wrap; line-height: 1.7; background: #f6f8fc; border-radius: 10px; padding: 16px; max-height: 420px; overflow: auto; }
+.document-summary { border-left: 5px solid #174fc2; background: linear-gradient(135deg, #f7faff, white); }
+.document-summary h2 { margin-top: 0; }
+.document-summary p { font-size: 18px; line-height: 1.7; margin-bottom: 0; }
 mark { background: #ffe08a; color: inherit; padding: 2px 1px; border-radius: 3px; }
 
 .warning { border-left: 4px solid #e8a000; padding: 10px 14px; background: #fff9e8; }
@@ -46,7 +48,15 @@ mark { background: #ffe08a; color: inherit; padding: 2px 1px; border-radius: 3px
 .finding header { display: flex; justify-content: space-between; align-items: center; gap: 16px; border-bottom: 1px solid #e8edf4; padding-bottom: 14px; }
 .finding header > div { display: flex; align-items: center; gap: 10px; }
 .finding h3 { margin: 0; }
+.finding-summary { font-size: 17px; font-weight: 650; color: #24344f; margin: 18px 0; }
+.verification { border-radius: 999px; padding: 7px 10px; font-size: 13px; white-space: nowrap; background: #eef2f7; }
+.verification.passed { color: #17623a; background: #e8f7ee; }
+.verification.failed { color: #8b4b00; background: #fff3d6; }
+.verification.not_run { color: #5b6472; background: #eef1f5; }
 .finding-source blockquote { margin: 0; background: #f6f8fc; border-left: 4px solid #285ed2; padding: 16px; line-height: 1.7; }
+.source-preview { display: block; width: 100%; max-height: 460px; object-fit: contain; object-position: left center; border: 1px solid #d8e0ec; border-radius: 10px; background: #eef2f7; }
+.text-source { margin-top: 10px; }
+.text-source summary { color: #4c5f7b; cursor: pointer; }
 .explanation-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 .explanation-grid section { background: #fafbfd; border: 1px solid #e5eaf1; border-radius: 10px; padding: 4px 14px; margin-top: 16px; }
 .revision { background: #f5f8ff; border: 1px solid #b9caef; border-radius: 10px; padding: 4px 14px 14px; margin: 18px 0; }

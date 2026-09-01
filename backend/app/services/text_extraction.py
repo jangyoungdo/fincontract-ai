@@ -18,6 +18,7 @@ class ExtractedDocument:
     """Page-aware extraction result; ``text`` remains the compatibility surface."""
     pages: tuple[str, ...]
     text: str
+    extension: str
 
 
 def _normalized_margin_line(line: str) -> str:
@@ -140,19 +141,24 @@ def _extract_pdf_document(data: bytes) -> ExtractedDocument:
             page_texts[index] = text
     page_texts = _remove_repeated_margins(page_texts)
     text = "\n".join(text for text in page_texts if text)
-    return ExtractedDocument(tuple(page_texts), text)
+    return ExtractedDocument(tuple(page_texts), text, ".pdf")
 
 
 def _extract_pdf_text(data: bytes) -> str:
     return _extract_pdf_document(data).text
 
 
-def extract_text(data: bytes, extension: str, max_characters: int = 200_000) -> str:
-    """Extract bounded text from validated TXT, PDF, or DOCX bytes in memory."""
+def extract_document(
+    data: bytes, extension: str, max_characters: int = 200_000
+) -> ExtractedDocument:
+    """Extract a bounded page-aware document while preserving the string contract."""
     if extension == ".txt":
         text = data.decode("utf-8")
+        pages = (text,)
     elif extension == ".pdf":
-        text = _extract_pdf_text(data)
+        extracted = _extract_pdf_document(data)
+        text = extracted.text
+        pages = extracted.pages
     elif extension == ".docx":
         document = Document(BytesIO(data))
         blocks = []
@@ -165,6 +171,7 @@ def extract_text(data: bytes, extension: str, max_characters: int = 200_000) -> 
                     if any(cells):
                         blocks.append(" | ".join(cells))
         text = "\n".join(blocks)
+        pages = (text,)
     else:
         raise ValueError("지원하지 않는 추출 형식입니다.")
 
@@ -173,4 +180,10 @@ def extract_text(data: bytes, extension: str, max_characters: int = 200_000) -> 
         raise ValueError("문서에서 텍스트를 추출하지 못했습니다.")
     if len(text) > max_characters:
         raise ValueError("추출 문자 수 제한을 초과했습니다.")
-    return text
+    cleaned_pages = tuple(page.replace("\x00", "").strip() for page in pages)
+    return ExtractedDocument(cleaned_pages, text, extension)
+
+
+def extract_text(data: bytes, extension: str, max_characters: int = 200_000) -> str:
+    """Compatibility wrapper for callers that still require one flattened string."""
+    return extract_document(data, extension, max_characters).text

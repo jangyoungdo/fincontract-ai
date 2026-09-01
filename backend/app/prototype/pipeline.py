@@ -35,6 +35,12 @@ class PrototypePipeline:
             MOCK_MODELS
             if self.provider.name == "mock"
             else {
+                "ANTHROPIC_FAST_MODEL": settings.openai_fast_model,
+                "ANTHROPIC_BALANCED_MODEL": settings.openai_balanced_model,
+                "ANTHROPIC_DEEP_MODEL": settings.openai_deep_model,
+            }
+            if self.provider.name == "openai"
+            else {
                 "ANTHROPIC_FAST_MODEL": settings.anthropic_fast_model,
                 "ANTHROPIC_BALANCED_MODEL": settings.anthropic_balanced_model,
                 "ANTHROPIC_DEEP_MODEL": settings.anthropic_deep_model,

@@ -34,7 +34,14 @@ export type Evidence = {
 
 export type Finding = {
   finding_id: string;
-  source: { masked_text: string; match_span: [number, number] };
+  summary_sentence: string;
+  source: {
+    masked_text: string;
+    match_span: [number, number];
+    page_number?: number | null;
+    preview_status?: "available" | "text_only" | "unavailable";
+    preview_ids?: string[];
+  };
   rule_signal: {
     rule_id: string;
     rule_version?: string;
@@ -78,7 +85,14 @@ export type CandidateFinding = {
   model_revision: string;
   matched_prototype_ids: string[];
   review_questions: string[];
-  source: { masked_text: string };
+  summary_sentence: string;
+  source: {
+    masked_text: string;
+    match_span?: [number, number];
+    page_number?: number | null;
+    preview_status?: "available" | "text_only" | "unavailable";
+    preview_ids?: string[];
+  };
   clause: { number: number | null; label?: string; subclause_label?: string | null; section_type?: string; section_id?: string; char_start: number; char_end: number };
 };
 
@@ -95,8 +109,10 @@ export type Analysis = {
     candidate_findings?: CandidateFinding[];
     warnings: string[];
     clause_count: number;
+    result_schema_version?: string;
+    summary?: { headline: string; top_categories: string[] };
     versions?: { ruleset?: string; corpus?: string };
-    document?: { masked_text: string; pii_types: string[]; pii_replacement_count: number };
+    document?: { pii_types: string[]; pii_replacement_count: number; page_count?: number; source_type?: string };
   };
   progress?: { state: string; percent: number };
 };
@@ -168,6 +184,10 @@ async function safeFetch(input: RequestInfo | URL, init: RequestInit, stage: Api
 /** Build the same-origin PDF endpoint without placing document content in the URL. */
 export function reportPdfUrl(analysisId: string): string {
   return `${API_BASE}/analyses/${encodeURIComponent(analysisId)}/report.pdf`;
+}
+
+export function sourcePreviewUrl(analysisId: string, previewId: string): string {
+  return `${API_BASE}/analyses/${encodeURIComponent(analysisId)}/source-previews/${encodeURIComponent(previewId)}.png`;
 }
 
 /** Upload one validated file, then create the single production analysis. */

@@ -83,7 +83,12 @@ services:
       EMBEDDING_PROVIDER: local_hashing
       USE_REDIS: "true"
       REDIS_URL: redis://redis:6379/0
-      LLM_PROVIDER: fake
+      LLM_PROVIDER: ${LLM_PROVIDER:-fake}
+      ALLOW_EXTERNAL_LLM: ${ALLOW_EXTERNAL_LLM:-false}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_FAST_MODEL: ${OPENAI_FAST_MODEL:-gpt-5.6-luna}
+      OPENAI_BALANCED_MODEL: ${OPENAI_BALANCED_MODEL:-gpt-5.6-luna}
+      OPENAI_DEEP_MODEL: ${OPENAI_DEEP_MODEL:-gpt-5.6-terra}
       SEMANTIC_MODEL_REQUIRED: "true"
       OCR_ENABLED: "true"
       OCR_LANGUAGES: kor+eng
@@ -120,7 +125,12 @@ services:
       EMBEDDING_PROVIDER: local_hashing
       USE_REDIS: "true"
       REDIS_URL: redis://redis:6379/0
-      LLM_PROVIDER: fake
+      LLM_PROVIDER: ${LLM_PROVIDER:-fake}
+      ALLOW_EXTERNAL_LLM: ${ALLOW_EXTERNAL_LLM:-false}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_FAST_MODEL: ${OPENAI_FAST_MODEL:-gpt-5.6-luna}
+      OPENAI_BALANCED_MODEL: ${OPENAI_BALANCED_MODEL:-gpt-5.6-luna}
+      OPENAI_DEEP_MODEL: ${OPENAI_DEEP_MODEL:-gpt-5.6-terra}
       SEMANTIC_MODEL_REQUIRED: "true"
       OCR_ENABLED: "true"
       OCR_LANGUAGES: kor+eng

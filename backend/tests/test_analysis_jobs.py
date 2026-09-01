@@ -126,9 +126,9 @@ def test_non_retryable_provider_failure_moves_directly_to_dead_letter_queue(monk
         )
         session.commit()
 
-    class NonRetryablePipeline:
-        def run(self, text: str, experiment_arm: str) -> dict:
-            raise ProviderError("LLM_SCHEMA_INVALID", retryable=False)
+        class NonRetryablePipeline:
+            def run(self, text: str, experiment_arm: str, **_kwargs) -> dict:
+                raise ProviderError("LLM_SCHEMA_INVALID", retryable=False)
 
     monkeypatch.setattr("app.services.analysis_jobs.read_encrypted", lambda _: b"synthetic text")
     monkeypatch.setattr(

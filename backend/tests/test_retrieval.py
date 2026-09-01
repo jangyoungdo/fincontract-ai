@@ -42,8 +42,9 @@ def test_analysis_attaches_retrieved_grounding_to_masked_findings() -> None:
     assert finding["grounding"]["status"] == "grounded"
     assert any(item["evidence_id"] == "test:grounding" for item in finding["evidence"])
     assert "test@example.com" not in str(finding)
-    assert "test@example.com" not in result["document"]["masked_text"]
-    assert "[EMAIL_1]" in result["document"]["masked_text"]
+    assert "masked_text" not in result["document"]
+    assert "test@example.com" not in str(result)
+    assert "[EMAIL_1]" in finding["source"]["masked_text"]
 
 
 def test_arm_d_uses_retrieved_evidence_before_assessment_and_preserves_disposition() -> None:

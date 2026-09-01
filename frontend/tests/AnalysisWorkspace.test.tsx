@@ -4,7 +4,8 @@ import { AnalysisWorkspace } from "@/components/AnalysisWorkspace";
 
 const detailedFinding = {
   finding_id: "finding-1",
-  source: { masked_text: "은행은 일방적으로 변경한다.", match_span: [4, 9] as [number, number] },
+  summary_sentence: "은행 조건과 관련해 변경 위험 신호가 확인되어 적용 범위를 검토해야 합니다.",
+  source: { masked_text: "은행은 일방적으로 변경한다.", match_span: [4, 9] as [number, number], page_number: 3, preview_status: "text_only", preview_ids: [] },
   rule_signal: {
     rule_id: "R04_UNILATERAL_CHANGE",
     rule_version: "0.2.0",
@@ -58,7 +59,8 @@ function mockUploadResult(overrides: Record<string, unknown> = {}) {
           findings: [detailedFinding],
           warnings: [],
           clause_count: 1,
-          document: { masked_text: "은행은 일방적으로 변경한다.", pii_types: [], pii_replacement_count: 0 },
+          summary: { headline: "이 문서에서는 계약 변경 관련 규칙 위험 신호 1건이 확인되었습니다.", top_categories: ["사업자의 일방적 계약내용 변경"] },
+          document: { pii_types: [], pii_replacement_count: 0, page_count: 3, source_type: "pdf" },
         },
         ...overrides,
       }),
@@ -92,12 +94,16 @@ describe("AnalysisWorkspace", () => {
     expect(screen.getAllByText(/순위나 추천은 표시하지 않습니다/).length).toBeGreaterThan(0);
   });
 
-  it("renders the exact match, explanation, revision, evidence, and verification detail", async () => {
+  it("renders concise summaries, page context, masked evidence, and collapsed detail", async () => {
     const fetchMock = mockUploadResult();
     await upload(fetchMock);
 
-    expect(screen.getByRole("heading", { name: "제1조 · 사업자의 일방적 계약내용 변경" })).toBeInTheDocument();
-    expect(screen.getAllByText("일방적으로", { selector: "mark" })).toHaveLength(2);
+    expect(screen.getByRole("heading", { name: "제1조 · PDF 3페이지 · 사업자의 일방적 계약내용 변경" })).toBeInTheDocument();
+    expect(screen.getByText("이 문서에서는 계약 변경 관련 규칙 위험 신호 1건이 확인되었습니다.")).toBeInTheDocument();
+    expect(screen.getByText("은행 조건과 관련해 변경 위험 신호가 확인되어 적용 범위를 검토해야 합니다.")).toBeInTheDocument();
+    expect(screen.getAllByText("일방적으로", { selector: "mark" })).toHaveLength(1);
+    expect(screen.getByText("법적 근거 추가 확인 필요")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "마스킹된 전체 문서" })).not.toBeInTheDocument();
     expect(screen.getByText("고객의 선택 절차 없이 일방적으로 변경할 수 있는 구조입니다.")).toBeInTheDocument();
     expect(screen.getByText("예상하지 못한 비용을 부담할 수 있습니다.")).toBeInTheDocument();
     expect(screen.getByText("변경 전 충분한 통지 기간이 있는지")).toBeInTheDocument();
