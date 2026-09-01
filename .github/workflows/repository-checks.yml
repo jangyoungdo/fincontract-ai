@@ -40,9 +40,11 @@ jobs:
         run: |
           bash -n scripts/setup-dev.sh
           bash -n scripts/new-worktree.sh
+          bash -n scripts/check-compose.sh
           bash -n .githooks/pre-push
           test -x scripts/setup-dev.sh
           test -x scripts/new-worktree.sh
+          test -x scripts/check-compose.sh
           test -x .githooks/pre-push
 
       - name: Run deterministic rule baseline tests

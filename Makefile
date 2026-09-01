@@ -1,4 +1,4 @@
-.PHONY: setup-backend setup-frontend test-backend test-frontend frontend-check api-check e2e failure-e2e migrate retention run-worker run-backend run-frontend infra-check ingest-demo ingest-public evaluate-public verify-index
+.PHONY: setup-backend setup-frontend test-backend test-frontend frontend-check api-check e2e failure-e2e migrate retention run-worker run-backend run-frontend infra-check ingest-demo ingest-public evaluate-public verify-index compose-check compose-logs
 
 PYTHON := backend/.venv/bin/python
 
@@ -10,7 +10,7 @@ setup-frontend:
 	cd frontend && npm install
 
 test-backend:
-	cd backend && .venv/bin/pytest
+	cd backend && .venv/bin/python -m pytest
 
 test-frontend:
 	cd frontend && npm run lint && npm test && npm run build
@@ -54,3 +54,9 @@ evaluate-public:
 
 verify-index:
 	cd backend && .venv/bin/python scripts/verify_index.py
+
+compose-check:
+	./scripts/check-compose.sh
+
+compose-logs:
+	docker compose logs --follow --tail=100 backend worker retention

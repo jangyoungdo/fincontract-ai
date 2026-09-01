@@ -1,4 +1,6 @@
 services:
+  # Stateful infrastructure is kept on named volumes so source checkouts never
+  # contain database rows, vector indexes, or encrypted customer documents.
   postgres:
     image: postgres:16.10-alpine
     environment:
@@ -29,11 +31,40 @@ services:
     volumes:
       - chroma-data:/data
     healthcheck:
-      test: ["CMD", "bash", "-c", "</dev/tcp/127.0.0.1/8000"]
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/api/v2/heartbeat"]
       interval: 5s
       timeout: 3s
       retries: 20
 
+  # Run schema setup as a one-shot gate. API, worker, and retention services do
+  # not start until the database is ready and this idempotent migration passes.
+  migrate:
+    build: ./backend
+    command: ["python", "scripts/migrate.py"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://fincontract:${POSTGRES_PASSWORD:-local-development-only}@postgres:5432/fincontract
+    depends_on:
+      postgres: {condition: service_healthy}
+    restart: "no"
+
+  # Seed only the reviewed public corpus. The read-only bind mount prevents an
+  # initializer bug from changing provenance manifests or source records.
+  corpus-init:
+    build: ./backend
+    command: ["python", "scripts/ingest_corpus.py", "/research/public_manifest_v0_1.json", "/research/public_corpus/statutes.jsonl", "--schema", "/research/manifest.schema.json"]
+    environment:
+      CHROMA_MODE: http
+      CHROMA_HOST: chroma
+      CHROMA_PORT: 8000
+      EMBEDDING_PROVIDER: local_hashing
+    depends_on:
+      chroma: {condition: service_healthy}
+    volumes:
+      - ./research:/research:ro
+    restart: "no"
+
+  # Browser-facing API contains no plaintext bind mounts; uploaded bytes and
+  # reports stay inside encrypted/application-managed named volumes.
   backend:
     build: ./backend
     environment:
@@ -43,6 +74,7 @@ services:
       CHROMA_MODE: http
       CHROMA_HOST: chroma
       CHROMA_PORT: 8000
+      EMBEDDING_PROVIDER: local_hashing
       USE_REDIS: "true"
       REDIS_URL: redis://redis:6379/0
       LLM_PROVIDER: fake
@@ -51,9 +83,9 @@ services:
       DOCUMENT_ENCRYPTION_KEY: ${DOCUMENT_ENCRYPTION_KEY:?set DOCUMENT_ENCRYPTION_KEY}
       ADMIN_AUDIT_TOKEN: ${ADMIN_AUDIT_TOKEN:-}
     depends_on:
-      postgres: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
+      corpus-init: {condition: service_completed_successfully}
       redis: {condition: service_healthy}
-      chroma: {condition: service_healthy}
     ports:
       - "8000:8000"
     volumes:
@@ -64,7 +96,10 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+    restart: unless-stopped
 
+  # Queue messages contain analysis IDs only. The worker re-reads encrypted
+  # documents from the shared volume and never places source text in Redis.
   worker:
     build: ./backend
     command: ["python", "scripts/run_worker.py"]
@@ -73,6 +108,7 @@ services:
       CHROMA_MODE: http
       CHROMA_HOST: chroma
       CHROMA_PORT: 8000
+      EMBEDDING_PROVIDER: local_hashing
       USE_REDIS: "true"
       REDIS_URL: redis://redis:6379/0
       LLM_PROVIDER: fake
@@ -80,13 +116,16 @@ services:
       REPORT_DIR: /data/reports
       DOCUMENT_ENCRYPTION_KEY: ${DOCUMENT_ENCRYPTION_KEY:?set DOCUMENT_ENCRYPTION_KEY}
     depends_on:
-      postgres: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
+      corpus-init: {condition: service_completed_successfully}
       redis: {condition: service_healthy}
-      chroma: {condition: service_healthy}
     volumes:
       - upload-data:/data/uploads
       - report-data:/data/reports
+    restart: unless-stopped
 
+  # Retention starts only after migrations and continuously removes expired
+  # encrypted files, report files, metadata, and audit events by policy.
   retention:
     build: ./backend
     command: ["python", "scripts/enforce_retention.py", "--loop"]
@@ -98,11 +137,14 @@ services:
       RETENTION_INTERVAL_SECONDS: "300"
       AUDIT_RETENTION_DAYS: ${AUDIT_RETENTION_DAYS:-365}
     depends_on:
-      postgres: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
     volumes:
       - upload-data:/data/uploads
       - report-data:/data/reports
+    restart: unless-stopped
 
+  # The production Next.js standalone image starts only after API readiness,
+  # which already covers PostgreSQL, Redis, and Chroma connectivity.
   frontend:
     build:
       context: ./frontend
@@ -112,6 +154,7 @@ services:
       backend: {condition: service_healthy}
     ports:
       - "3000:3000"
+    restart: unless-stopped
 
 volumes:
   postgres-data:
