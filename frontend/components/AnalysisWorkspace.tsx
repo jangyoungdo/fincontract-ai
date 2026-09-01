@@ -3,6 +3,7 @@
 import { FormEvent, ReactNode, useState } from "react";
 import {
   Analysis,
+  CandidateFinding,
   ClientApiError,
   Finding,
   deleteDocument,
@@ -76,7 +77,7 @@ function FindingCard({ finding }: { finding: Finding }) {
   const explanation = finding.explanation;
   return <article className="finding">
     <header>
-      <div><span className="tag">{strengthLabels[finding.rule_signal.signal_strength] ?? finding.rule_signal.signal_strength}</span><h3>{finding.clause ? `제${finding.clause.number}조 · ` : ""}{finding.rule_signal.rule_name ?? finding.rule_signal.category}</h3></div>
+      <div><span className="tag">{strengthLabels[finding.rule_signal.signal_strength] ?? finding.rule_signal.signal_strength}</span><h3>{finding.clause ? `${finding.clause.label ?? `제${finding.clause.number}조`}${finding.clause.subclause_label ? ` · ${finding.clause.subclause_label}` : ""} · ` : ""}{finding.rule_signal.rule_name ?? finding.rule_signal.category}</h3></div>
       <span>검증 {finding.verification.status}</span>
     </header>
 
@@ -130,6 +131,17 @@ function FindingCard({ finding }: { finding: Finding }) {
       </dl>
       {(finding.verification.issues ?? []).map(issue => <p className="verification-issue" key={`${issue.code}-${issue.message}`}><b>{issue.code}</b> · {issue.message}</p>)}
     </details>
+  </article>;
+}
+
+function CandidateCard({ candidate }: { candidate: CandidateFinding }) {
+  const clause = candidate.clause.label ?? `제${candidate.clause.number}조`;
+  return <article className="finding candidate">
+    <header><div><span className="tag">검토 후보 · {candidate.confidence}</span><h3>{clause} · {candidate.name}</h3></div><span>규칙 미매핑</span></header>
+    <section className="finding-source"><h4>후보 근거</h4><blockquote>{candidate.source.masked_text}</blockquote></section>
+    <section><h4>겹친 분류 용어</h4><p>{candidate.matched_terms.join(", ")}</p></section>
+    <section><h4>확인 질문</h4><ul>{candidate.review_questions.map(question => <li key={question}>{question}</li>)}</ul></section>
+    <small>이 항목은 결정론 규칙 탐지가 아닌 로컬 분류 후보이며, 법률 판단이나 확정 신호가 아닙니다.</small>
   </article>;
 }
 
@@ -190,6 +202,7 @@ export function AnalysisWorkspace() {
 
   const progressState = analysis?.progress?.state ?? analysis?.status;
   const findings = analysis?.result?.findings ?? [];
+  const candidateFindings = analysis?.result?.candidate_findings ?? [];
 
   return <main>
     <section className="hero">
@@ -216,14 +229,16 @@ export function AnalysisWorkspace() {
         <div><span>진행률</span><b>{analysis.progress?.percent ?? (analysis.status === "completed" ? 100 : 0)}%</b></div>
         <div><span>결과</span><b>{dispositionLabels[analysis.disposition] ?? analysis.disposition}</b></div>
         <div><span>검토 신호</span><b>{findings.length}</b></div>
+        <div><span>추가 검토 후보</span><b>{candidateFindings.length}</b></div>
         {analysis.status === "completed" && <button className="report-link" onClick={report}>PDF 리포트</button>}
         <button className="secondary" onClick={remove}>원문·결과 삭제</button>
       </div>
       {analysis.status === "failed" && <FailurePanel analysis={analysis} onRetry={refresh} />}
-      {analysis.disposition === "no_signal" && <section className="no-signal"><h2>실험 규칙 신호 없음</h2><p>현재 8개 실험 규칙에서 위험 신호가 탐지되지 않았습니다. 이는 계약의 안전성이나 적법성을 보장하지 않습니다.</p></section>}
+      {analysis.disposition === "no_signal" && <section className="no-signal"><h2>실험 규칙 신호 없음</h2><p>현재 14개 실험 규칙에서 위험 신호가 탐지되지 않았습니다. 이는 계약의 안전성이나 적법성을 보장하지 않습니다.</p></section>}
       {(analysis.result?.warnings ?? []).map(warning => <p className="warning" key={warning}>{warning}</p>)}
       {analysis.result?.document?.masked_text && <section className="panel source-viewer"><h2>마스킹된 전체 문서</h2><p className="muted">개인정보 치환 {analysis.result.document.pii_replacement_count}건 · 실제 탐지 문구를 강조 표시합니다.</p><pre>{renderMaskedDocument(analysis.result.document.masked_text, findings)}</pre></section>}
       {findings.map(finding => <FindingCard finding={finding} key={finding.finding_id} />)}
+      {candidateFindings.length > 0 && <section className="panel"><h2>추가 검토 후보</h2><p className="muted">결정론 규칙 신호가 없는 조항에서만, 로컬 분류 사전과의 용어 유사도를 바탕으로 표시합니다.</p>{candidateFindings.map(candidate => <CandidateCard candidate={candidate} key={candidate.candidate_id} />)}</section>}
       <section className="panel limitations"><h2>데이터 제공 범위</h2><p><b>원문 뷰어</b>는 개인정보를 치환한 전체 텍스트만 표시합니다. 마스킹 전 텍스트는 화면·검색·외부 모델로 전송하지 않습니다.</p><p><b>은행 비교</b>는 검증된 공개·허가 비교 데이터가 아직 없어 순위·추천·비교 결과를 제공하지 않습니다.</p><p><b>리포트</b>는 계약 검토 보조 자료이며, 법률 판단이나 상품 추천이 아닙니다.</p></section>
     </section>}
     {!analysis && <section className="panel limitations"><h2>은행 비교</h2><p>검증된 공개·허가 비교 데이터가 아직 없습니다. 따라서 순위나 추천은 표시하지 않습니다.</p></section>}

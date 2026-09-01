@@ -1,4 +1,4 @@
-"""Conservative PII masking gate for the text-only prototype."""
+"""Conservative PII masking gate for Korean contract text."""
 
 from __future__ import annotations
 
@@ -16,12 +16,16 @@ class MaskingResult:
     passed: bool
 
 
+# A contract party ("채무자는", "고객은") is not an identity label. Only an
+# explicit name field, or a complete identifying predicate, may consume a name.
+NAME_LABEL = r"(?:성명|이름|계약자명|채무자명|고객명)\s*[:：]\s*"
+IDENTIFYING_PREDICATE = r"(?:계약자|채무자|고객)(?:는|은)\s*"
 PATTERNS: List[Tuple[str, Pattern[str]]] = [
     (
         "name",
         re.compile(
-            r"(?P<prefix>(?:성명|이름|계약자명?|채무자명?|고객명?)\s*(?:[:：]|은|는)\s*)"
-            r"(?P<value>(?!(?:은행|회사|법인|사업자)(?:\s|은|는|이|가|과|와|$))[가-힣]{2,5})"
+            rf"(?P<prefix>{NAME_LABEL})(?P<value>[가-힣]{{2,5}})(?=\s|$|[.,;])"
+            rf"|(?P<prefix_context>{IDENTIFYING_PREDICATE})(?P<value_context>(?!(?:은행|회사|법인|사업자|채권자|금융사))[가-힣]{{2,5}})(?=(?:이|입니|이며|이고|씨))"
         ),
     ),
     (
@@ -55,7 +59,7 @@ def mask_pii(text: str) -> MaskingResult:
             nonlocal replacement_count
             counters[pii_type] = counters.get(pii_type, 0) + 1
             replacement_count += 1
-            prefix = match.groupdict().get("prefix", "")
+            prefix = match.groupdict().get("prefix") or match.groupdict().get("prefix_context") or ""
             return f"{prefix}[{pii_type.upper()}_{counters[pii_type]}]"
 
         masked, count = pattern.subn(replace, masked)

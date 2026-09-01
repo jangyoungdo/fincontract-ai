@@ -11,7 +11,7 @@
 ## 현재 상태
 
 - Next.js 업로드·분석 대시보드와 FastAPI 문서/분석/PDF 리포트 API 구현
-- PDF/DOCX/TXT 추출, PII 마스킹, 8개 규칙, RAG 선행 검색과 근거 검증 구현
+- PDF/DOCX/TXT 추출, PII 마스킹, 14개 규칙, RAG 선행 검색과 근거 검증 구현
 - PostgreSQL 메타데이터, Redis worker 재시도·격리, ChromaDB 5개 컬렉션 구현
 - Fernet 원문 암호화, 문서 TTL, 감사 로그·만료와 관리자 보호 조회 구현
 - fake provider 전체 흐름과 Claude structured output 라우팅을 분리하고 외부 전송은 opt-in으로 제한
@@ -45,7 +45,7 @@
 
 | 실험군 | 구성 | 확인할 내용 |
 |---|---|---|
-| A | 8개 규칙 엔진 | 최소 비용 기준선과 규칙별 탐지 성능 |
+| A | 14개 규칙 엔진 | 최소 비용 기준선과 규칙별 탐지 성능 |
 | B | 단일 LLM, RAG 없음 | 일반 모델의 기본 추론 성능과 환각 위험 |
 | C | RAG + 단일 분석 에이전트 | 도메인 근거가 품질에 미치는 영향 |
 | D | 계획 + 검색 + 분석 + 검증 | 역할 분리의 추가 효과와 운영 비용 |
@@ -69,7 +69,7 @@ B는 연구용 비교군이며, 마스킹되지 않은 원문을 외부 모델�
 UI/UX                 업로드 · 원문/근거 대조 · 사람의 승인/수정
 Management            워크플로 상태 · 재시도 · 감사로그 · 버전 관리
 AI Service            계획 · 근거 검색 · 계약 분석 · 결과 검증
-Deterministic Tools   파일 검증 · PII 마스킹 · 조항 분리 · 8개 규칙 · 인용 검사
+Deterministic Tools   파일 검증 · PII 마스킹 · 조항 분리 · 14개 규칙 · 인용 검사
 Data                   PostgreSQL · ChromaDB 5개 컬렉션 · 평가셋 · 출처 manifest
 Infrastructure         Docker Compose · CI · 비밀정보 관리 · 관측성
 ```
@@ -96,7 +96,7 @@ Infrastructure         Docker Compose · CI · 비밀정보 관리 · 관측성
 파일 검증·로컬 추출
   → PII 마스킹·검증
   → 조항 분리
-  → 8개 규칙 엔진
+  → 14개 규칙 엔진
   → ChromaDB 근거 검색
   → Claude 구조화 분석
   → 근거·인용 검증
@@ -121,6 +121,9 @@ Infrastructure         Docker Compose · CI · 비밀정보 관리 · 관측성
 [Windows 11 + WSL2 단계별 인계 가이드](docs/windows-wsl2-handoff.md)의 체크포인트를 순서대로
 확인합니다. 이 경로는 Docker Desktop의 WSL2 엔진에서 소스를 직접 빌드하며 사전 빌드 이미지를
 별도로 배포하지 않습니다.
+
+최초 설치를 마친 뒤 매일 앱을 켜고 끄는 절차는
+[Windows 11 일상 운영 가이드](docs/windows-wsl2-daily-operations.md)를 사용합니다.
 
 Docker가 없는 환경에서도 Backend와 Frontend를 각각 검증할 수 있습니다.
 

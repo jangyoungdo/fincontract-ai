@@ -63,7 +63,19 @@ export type Finding = {
     issues?: Array<{ code: string; message: string }>;
     attempts?: number;
   };
-  clause?: { number: number; char_start: number; char_end: number };
+  clause?: { number: number; label?: string; subclause_label?: string; char_start: number; char_end: number };
+};
+
+export type CandidateFinding = {
+  candidate_id: string;
+  category: string;
+  name: string;
+  status: "deterministic_rule_unmapped_candidate";
+  confidence: string;
+  matched_terms: string[];
+  review_questions: string[];
+  source: { masked_text: string };
+  clause: { number: number; label?: string; char_start: number; char_end: number };
 };
 
 export type Analysis = {
@@ -76,6 +88,7 @@ export type Analysis = {
   retryable?: boolean | null;
   result?: {
     findings: Finding[];
+    candidate_findings?: CandidateFinding[];
     warnings: string[];
     clause_count: number;
     versions?: { ruleset?: string; corpus?: string };
