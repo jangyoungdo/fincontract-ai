@@ -11,7 +11,7 @@
 | 계획 | fast | 700 | 계약 유형과 실행 단계만 구조화 |
 | 근거 선별 | fast | 700 | 검색 결과의 관련성·형식 확인 |
 | 계약 분석 | balanced | 1,600 | 규칙 신호와 근거를 이용한 핵심 추론 |
-| 결과 검증 | fast | 700 | evidence ID, 인용, 스키마와 단정 표현 검사 |
+| 결과 검증 | deterministic | 0 | 현재 evidence ID, 인용 상태, 스키마와 단정 표현을 코드로 검사 |
 | 최종 재검토 | deep | 2,400 | 고위험이면서 근거가 충돌할 때만 제한적으로 사용 |
 
 `fast`, `balanced`, `deep`은 코드에 특정 모델명을 고정하지 않는 논리 등급입니다. 배포 환경에서 다음 설정으로 실제 Anthropic 모델 ID를 연결합니다.
@@ -28,7 +28,8 @@ ANTHROPIC_DEEP_MODEL=<현재 사용 가능한 Opus 계열 모델 ID>
 
 - 분석 에이전트는 기본적으로 balanced를 사용합니다.
 - `high risk`와 `conflicting evidence`가 동시에 충족될 때만 deep을 요청합니다.
-- 검증 에이전트가 첫 시도에 실패하면 balanced로 한 번만 재검증합니다.
+- 현재 검증은 LLM을 다시 호출하지 않습니다. 향후 deterministic 검증의 반복 실패가
+  실험으로 확인된 경우에만 fast/balanced 검증 호출을 별도 기능으로 도입합니다.
 - deep 사용은 일일 요청 상한을 두고, 상한을 넘으면 사람 검토로 전환합니다.
 - 토큰 입력 상한을 넘은 문서는 더 큰 모델로 바로 보내지 않고 조항 단위로 분할하거나 검색 근거 수를 줄입니다.
 
@@ -43,5 +44,12 @@ ANTHROPIC_DEEP_MODEL=<현재 사용 가능한 Opus 계열 모델 ID>
 - 에이전트별 대화 기록을 공유하지 않고 구조화된 최소 산출물만 다음 단계로 넘깁니다.
 - 비실시간 대량 평가는 Batch API 적용 여부를 별도 실험합니다.
 - 매 호출의 input/output/cache token, 모델, 역할, latency와 재시도 원인을 기록합니다.
+
+## 실제 연결 최소 검증
+
+테스트 전용 키와 합성 데이터만 사용해 `make claude-check`를 실행합니다. 이 명령은 한 번의
+bounded structured-output 요청만 보내며 prompt·응답 본문·키를 출력하지 않고 모델,
+prompt 버전, input/output token, latency, schema/evidence 검증 여부만 출력합니다. SDK 자체
+재시도는 0이며 timeout·rate limit만 worker의 최대 3회 재시도 대상으로 분류됩니다.
 
 Anthropic 공식 문서는 단순 작업에는 작은 모델, 복잡한 추론에는 상위 모델을 선택하고 prompt caching과 batch 처리를 비용 최적화 수단으로 안내합니다. 실제 절감 효과는 FinContract AI의 동일 평가셋에서 품질 지표와 함께 측정합니다.

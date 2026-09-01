@@ -1,9 +1,11 @@
 from types import SimpleNamespace
 
+import httpx
 import pytest
+from anthropic import APIStatusError, APITimeoutError, RateLimitError
 
 from app.config import get_settings
-from app.llm.provider import AnthropicProvider, get_provider
+from app.llm.provider import AnthropicProvider, ProviderError, get_provider
 
 
 @pytest.fixture(autouse=True)
@@ -49,6 +51,48 @@ def test_anthropic_requires_all_routed_model_names(monkeypatch: pytest.MonkeyPat
         get_provider()
 
 
+def test_anthropic_sdk_retries_are_disabled_in_favor_of_worker_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured = {}
+    for name, value in {
+        "LLM_PROVIDER": "anthropic",
+        "ALLOW_EXTERNAL_LLM": "true",
+        "ANTHROPIC_API_KEY": "test-key",
+        "ANTHROPIC_FAST_MODEL": "fast-test",
+        "ANTHROPIC_BALANCED_MODEL": "balanced-test",
+        "ANTHROPIC_DEEP_MODEL": "deep-test",
+    }.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setattr(
+        "app.llm.provider.Anthropic",
+        lambda **kwargs: captured.update(kwargs) or SimpleNamespace(),
+    )
+    get_settings.cache_clear()
+
+    assert get_provider().name == "anthropic"
+    assert captured["timeout"] == 20.0
+    assert captured["max_retries"] == 0
+
+
+def test_anthropic_rejects_overlapping_sdk_retry_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for name, value in {
+        "LLM_PROVIDER": "anthropic",
+        "ALLOW_EXTERNAL_LLM": "true",
+        "ANTHROPIC_API_KEY": "test-key",
+        "ANTHROPIC_FAST_MODEL": "fast-test",
+        "ANTHROPIC_BALANCED_MODEL": "balanced-test",
+        "ANTHROPIC_DEEP_MODEL": "deep-test",
+        "ANTHROPIC_SDK_MAX_RETRIES": "1",
+    }.items():
+        monkeypatch.setenv(name, value)
+    get_settings.cache_clear()
+    with pytest.raises(RuntimeError, match="must remain 0"):
+        get_provider()
+
+
 def test_anthropic_provider_requests_and_validates_structured_output() -> None:
     captured = {}
 
@@ -56,6 +100,7 @@ def test_anthropic_provider_requests_and_validates_structured_output() -> None:
         def create(self, **kwargs):
             captured.update(kwargs)
             return SimpleNamespace(
+                usage=SimpleNamespace(input_tokens=120, output_tokens=45),
                 content=[
                     SimpleNamespace(
                         text='{"risk_level":"medium","applicability":"unknown",'
@@ -75,4 +120,96 @@ def test_anthropic_provider_requests_and_validates_structured_output() -> None:
     )
     assert result["cited_evidence_ids"] == ["verified:1"]
     assert captured["model"] == "claude-test-model"
+    assert captured["max_tokens"] == 600
     assert captured["output_config"]["format"]["type"] == "json_schema"
+    assert provider.last_call_metadata()["input_tokens"] == 120
+    assert provider.last_call_metadata()["output_tokens"] == 45
+    assert provider.last_call_metadata()["prompt_version"] == "assessment-v1"
+    assert "content" not in provider.last_call_metadata()
+
+
+def test_anthropic_provider_blocks_unmasked_pii_before_network_call() -> None:
+    called = False
+
+    class Messages:
+        def create(self, **kwargs):
+            nonlocal called
+            called = True
+
+    provider = AnthropicProvider.__new__(AnthropicProvider)
+    provider.client = SimpleNamespace(messages=Messages())
+    with pytest.raises(ProviderError, match="OUTBOUND_PII_BLOCKED") as caught:
+        provider.assess(
+            {"category": "test", "rationale": "주민번호 900101-1234567"},
+            [{"evidence_id": "verified:1"}],
+            "claude-test-model",
+        )
+    assert not caught.value.retryable
+    assert not called
+
+
+@pytest.mark.parametrize("response_text", ["", "{}", "not-json"])
+def test_anthropic_provider_rejects_empty_or_invalid_schema(response_text: str) -> None:
+    class Messages:
+        def create(self, **kwargs):
+            return SimpleNamespace(content=[SimpleNamespace(text=response_text)], usage=None)
+
+    provider = AnthropicProvider.__new__(AnthropicProvider)
+    provider.client = SimpleNamespace(messages=Messages())
+    with pytest.raises(ProviderError, match="LLM_SCHEMA_INVALID") as caught:
+        provider.assess(
+            {"category": "test", "rationale": "masked"},
+            [{"evidence_id": "verified:1"}],
+            "claude-test-model",
+        )
+    assert not caught.value.retryable
+
+
+@pytest.mark.parametrize("failure_code", ["timeout", "rate_limit"])
+def test_anthropic_provider_classifies_transient_failures(failure_code: str) -> None:
+    request = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+
+    class Messages:
+        def create(self, **kwargs):
+            if failure_code == "timeout":
+                raise APITimeoutError(request=request)
+            response = httpx.Response(429, request=request)
+            raise RateLimitError("limited", response=response, body=None)
+
+    provider = AnthropicProvider.__new__(AnthropicProvider)
+    provider.client = SimpleNamespace(messages=Messages())
+    expected = "LLM_UNAVAILABLE" if failure_code == "timeout" else "LLM_RATE_LIMITED"
+    with pytest.raises(ProviderError, match=expected) as caught:
+        provider.assess(
+            {"category": "test", "rationale": "masked"},
+            [{"evidence_id": "verified:1"}],
+            "claude-test-model",
+        )
+    assert caught.value.retryable
+
+
+@pytest.mark.parametrize(
+    ("status_code", "expected_code", "retryable"),
+    [(500, "LLM_UNAVAILABLE", True), (400, "LLM_REQUEST_REJECTED", False)],
+)
+def test_anthropic_provider_classifies_other_api_statuses(
+    status_code: int,
+    expected_code: str,
+    retryable: bool,
+) -> None:
+    request = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+
+    class Messages:
+        def create(self, **kwargs):
+            response = httpx.Response(status_code, request=request)
+            raise APIStatusError("failed", response=response, body=None)
+
+    provider = AnthropicProvider.__new__(AnthropicProvider)
+    provider.client = SimpleNamespace(messages=Messages())
+    with pytest.raises(ProviderError, match=expected_code) as caught:
+        provider.assess(
+            {"category": "test", "rationale": "masked"},
+            [{"evidence_id": "verified:1"}],
+            "claude-test-model",
+        )
+    assert caught.value.retryable is retryable

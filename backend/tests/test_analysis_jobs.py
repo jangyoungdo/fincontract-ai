@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
+from app.llm.provider import ProviderError
 from app.models import AnalysisRecord, AuditEvent, DocumentRecord, get_session_factory
 from app.services.analysis_jobs import (
     DEAD_LETTER_QUEUE_NAME,
@@ -94,3 +95,54 @@ def test_failed_job_retries_then_moves_to_dead_letter_queue(monkeypatch) -> None
         assert session.query(AuditEvent).filter_by(
             analysis_id=analysis_id, event_type="analysis_failed"
         ).one()
+
+
+def test_non_retryable_provider_failure_moves_directly_to_dead_letter_queue(monkeypatch) -> None:
+    """Avoid repeated external calls when privacy or schema validation fails."""
+    document_id = "non-retryable-document"
+    analysis_id = "non-retryable-analysis"
+    now = datetime.now(timezone.utc)
+    with get_session_factory()() as session:
+        session.add(
+            DocumentRecord(
+                id=document_id,
+                original_filename="contract.txt",
+                mime_type="text/plain",
+                sha256="1" * 64,
+                status="ready",
+                storage_path="synthetic.enc",
+                uploaded_at=now,
+                expires_at=now + timedelta(hours=1),
+            )
+        )
+        session.add(
+            AnalysisRecord(
+                id=analysis_id,
+                document_id=document_id,
+                status="queued",
+                disposition="pending",
+                experiment_arm="D",
+            )
+        )
+        session.commit()
+
+    class NonRetryablePipeline:
+        def run(self, text: str, experiment_arm: str) -> dict:
+            raise ProviderError("LLM_SCHEMA_INVALID", retryable=False)
+
+    monkeypatch.setattr("app.services.analysis_jobs.read_encrypted", lambda _: b"synthetic text")
+    monkeypatch.setattr(
+        "app.services.analysis_jobs.DocumentAnalysisPipeline",
+        NonRetryablePipeline,
+    )
+    redis_client = FakeRedis()
+    process_analysis(analysis_id, redis_client)
+
+    assert QUEUE_NAME not in redis_client.queues
+    assert redis_client.queues[DEAD_LETTER_QUEUE_NAME] == [analysis_id]
+    with get_session_factory()() as session:
+        record = session.get(AnalysisRecord, analysis_id)
+        assert record is not None
+        assert record.status == "failed"
+        assert record.disposition == "needs_review"
+        assert record.error_code == "LLM_SCHEMA_INVALID"

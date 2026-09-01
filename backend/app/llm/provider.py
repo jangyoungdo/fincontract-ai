@@ -3,12 +3,24 @@
 from __future__ import annotations
 
 import json
+import time
 from typing import Any, Literal, Protocol
 
-from anthropic import Anthropic
-from pydantic import BaseModel, Field
+from anthropic import Anthropic, APIConnectionError, APIStatusError, APITimeoutError, RateLimitError
+from pydantic import BaseModel, Field, ValidationError
 
 from app.config import get_settings
+
+PROMPT_VERSION = "assessment-v1"
+
+
+class ProviderError(RuntimeError):
+    """Expose only stable failure metadata to retry and review workflows."""
+
+    def __init__(self, code: str, *, retryable: bool) -> None:
+        super().__init__(code)
+        self.code = code
+        self.retryable = retryable
 
 
 class Provider(Protocol):
@@ -16,9 +28,17 @@ class Provider(Protocol):
     name: str
 
     def assess(
-        self, rule_signal: dict[str, Any], evidence: list[dict[str, Any]], model: str
+        self,
+        rule_signal: dict[str, Any],
+        evidence: list[dict[str, Any]],
+        model: str,
+        max_tokens: int = 600,
     ) -> dict[str, Any]:
         """Return one schema-compatible assessment for masked, grounded input."""
+        ...
+
+    def last_call_metadata(self) -> dict[str, Any]:
+        """Return non-content telemetry for the most recent assessment call."""
         ...
 
 
@@ -39,7 +59,16 @@ class FakeProvider:
     # to make synthetic agent results unmistakable.
     name = "mock"
 
-    def assess(self, rule_signal: dict[str, Any], evidence: list[dict[str, Any]], model: str) -> dict[str, Any]:
+    def __init__(self) -> None:
+        self._last_call = {"prompt_version": PROMPT_VERSION, "synthetic": True}
+
+    def assess(
+        self,
+        rule_signal: dict[str, Any],
+        evidence: list[dict[str, Any]],
+        model: str,
+        max_tokens: int = 600,
+    ) -> dict[str, Any]:
         """Build a stable review-oriented assessment citing every supplied item."""
         return {
             "risk_level": "medium",
@@ -51,35 +80,87 @@ class FakeProvider:
             "cited_evidence_ids": [item["evidence_id"] for item in evidence],
         }
 
+    def last_call_metadata(self) -> dict[str, Any]:
+        """Mark fake-provider usage without fabricating token or latency values."""
+        return dict(self._last_call)
+
 
 class AnthropicProvider:
     """Call Claude with JSON-schema constrained output after explicit opt-in."""
     name = "anthropic"
 
-    def __init__(self, api_key: str) -> None:
-        self.client = Anthropic(api_key=api_key)
+    def __init__(self, api_key: str, timeout_seconds: float = 20.0, max_retries: int = 0) -> None:
+        self.client = Anthropic(
+            api_key=api_key,
+            timeout=timeout_seconds,
+            max_retries=max_retries,
+        )
+        self._last_call: dict[str, Any] = {}
 
-    def assess(self, rule_signal: dict[str, Any], evidence: list[dict[str, Any]], model: str) -> dict[str, Any]:
+    def assess(
+        self,
+        rule_signal: dict[str, Any],
+        evidence: list[dict[str, Any]],
+        model: str,
+        max_tokens: int = 600,
+    ) -> dict[str, Any]:
         """Assess a masked rule signal using only the retrieved evidence supplied."""
         prompt = {
             "task": "Return a cautious Korean JSON assessment, never a legal conclusion.",
+            "prompt_version": PROMPT_VERSION,
             "rule_signal": rule_signal,
             "evidence": evidence,
             "required_keys": ["risk_level", "applicability", "summary", "rationale", "counter_considerations", "review_questions", "cited_evidence_ids"],
         }
-        response = self.client.messages.create(
-            model=model,
-            max_tokens=600,
-            messages=[{"role": "user", "content": json.dumps(prompt, ensure_ascii=False)}],
-            output_config={
-                "format": {
-                    "type": "json_schema",
-                    "schema": AssessmentOutput.model_json_schema(),
-                }
-            },
-        )
+        serialized_prompt = json.dumps(prompt, ensure_ascii=False)
+        # Re-run the same conservative detector at the final outbound boundary.
+        # Import lazily to avoid a package initialization cycle with the pipeline.
+        from app.prototype.pii import mask_pii
+
+        masking = mask_pii(serialized_prompt)
+        if not masking.passed or masking.replacement_count:
+            raise ProviderError("OUTBOUND_PII_BLOCKED", retryable=False)
+
+        started = time.perf_counter()
+        try:
+            response = self.client.messages.create(
+                model=model,
+                max_tokens=max_tokens,
+                messages=[{"role": "user", "content": serialized_prompt}],
+                output_config={
+                    "format": {
+                        "type": "json_schema",
+                        "schema": AssessmentOutput.model_json_schema(),
+                    }
+                },
+            )
+        except RateLimitError as exc:
+            raise ProviderError("LLM_RATE_LIMITED", retryable=True) from exc
+        except (APITimeoutError, APIConnectionError) as exc:
+            raise ProviderError("LLM_UNAVAILABLE", retryable=True) from exc
+        except APIStatusError as exc:
+            retryable = exc.status_code >= 500
+            code = "LLM_UNAVAILABLE" if retryable else "LLM_REQUEST_REJECTED"
+            raise ProviderError(code, retryable=retryable) from exc
+        elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
         text = "".join(block.text for block in response.content if hasattr(block, "text"))
-        return AssessmentOutput.model_validate_json(text).model_dump()
+        try:
+            assessment = AssessmentOutput.model_validate_json(text).model_dump()
+        except ValidationError as exc:
+            raise ProviderError("LLM_SCHEMA_INVALID", retryable=False) from exc
+        usage = getattr(response, "usage", None)
+        self._last_call = {
+            "prompt_version": PROMPT_VERSION,
+            "model": model,
+            "latency_ms": elapsed_ms,
+            "input_tokens": getattr(usage, "input_tokens", None),
+            "output_tokens": getattr(usage, "output_tokens", None),
+        }
+        return assessment
+
+    def last_call_metadata(self) -> dict[str, Any]:
+        """Return token and latency telemetry without prompt or response content."""
+        return dict(self._last_call)
 
 
 def get_provider() -> Provider:
@@ -104,4 +185,12 @@ def get_provider() -> Provider:
     ]
     if missing_models:
         raise RuntimeError(f"Required Anthropic model settings are missing: {', '.join(missing_models)}")
-    return AnthropicProvider(settings.anthropic_api_key)
+    if settings.anthropic_sdk_max_retries != 0:
+        raise RuntimeError(
+            "ANTHROPIC_SDK_MAX_RETRIES must remain 0; the worker owns the retry budget"
+        )
+    return AnthropicProvider(
+        settings.anthropic_api_key,
+        timeout_seconds=settings.anthropic_timeout_seconds,
+        max_retries=settings.anthropic_sdk_max_retries,
+    )

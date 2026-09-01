@@ -13,7 +13,7 @@
 | Backend | PII 마스킹 | implemented | 6-case regression + injected OCR 주민번호 masking boundary verified | 실제 OCR 오인식 변형 회귀셋 pending |
 | Backend | 조항 분리 | implemented | paragraph + DOCX table integration verified | PDF 복잡 표 구조 복원 제외 |
 | Backend | 위험도 판정 | prototype | 8-rule unit verified | 합성 데이터, 전문가 검토 미완료 |
-| Backend | LLM 분석 | partial | fake-provider E2E, structured-output contract, opt-in/fail-closed verified | 실제 Claude 키·연결 미검증 |
+| Backend | LLM 분석 | partial | fake E2E + structured output, outbound PII, timeout/rate/schema/status, 8-call budget fault injection verified | 실제 Claude 1-call 연결·비용·보존정책 미검증 |
 | Backend | 리포트 생성 | implemented | JSON/PDF API integration + browser download E2E verified | 다중 페이지 회귀셋 확장 필요 |
 | RAG | 5개 컬렉션 | implemented | read/write + 공식 법령 7개 chunk ingest verified | 심결·판례·분쟁·조항패턴 verified corpus 미확보 |
 | RAG | Hybrid Search | implemented | local hashing + local MiniLM 각각 7-query Hit@3 1.0/MRR 1.0, provider mismatch gate verified | 소규모 개발 평가이며 블라인드 전문가 평가 필요 |

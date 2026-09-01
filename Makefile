@@ -1,4 +1,4 @@
-.PHONY: setup-backend setup-frontend test-backend test-frontend frontend-check api-check e2e failure-e2e migrate retention run-worker run-backend run-frontend infra-check ingest-demo ingest-public evaluate-public verify-index compose-check compose-logs
+.PHONY: setup-backend setup-frontend test-backend test-frontend frontend-check api-check e2e failure-e2e migrate retention run-worker run-backend run-frontend infra-check ingest-demo ingest-public evaluate-public verify-index compose-check compose-logs claude-check
 
 PYTHON := backend/.venv/bin/python
 
@@ -60,3 +60,6 @@ compose-check:
 
 compose-logs:
 	docker compose logs --follow --tail=100 backend worker retention
+
+claude-check:
+	cd backend && PYTHONPATH=. .venv/bin/python scripts/check_anthropic.py

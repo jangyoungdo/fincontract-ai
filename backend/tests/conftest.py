@@ -2,6 +2,8 @@ import os
 import tempfile
 from pathlib import Path
 
+import pytest
+
 TEST_ROOT = Path(tempfile.mkdtemp(prefix="fincontract-tests-"))
 os.environ["DATABASE_URL"] = f"sqlite:///{TEST_ROOT / 'test.db'}"
 os.environ["CHROMA_MODE"] = "persistent"
@@ -11,3 +13,11 @@ os.environ["REPORT_DIR"] = str(TEST_ROOT / "reports")
 os.environ["USE_REDIS"] = "false"
 os.environ["DOCUMENT_ENCRYPTION_KEY"] = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
 os.environ["ADMIN_AUDIT_TOKEN"] = "test-admin-token"
+
+
+@pytest.fixture(scope="session", autouse=True)
+def initialize_test_database() -> None:
+    """Create the isolated schema so every test file also passes on its own."""
+    from app.models import get_engine, upgrade_database
+
+    upgrade_database(get_engine())
