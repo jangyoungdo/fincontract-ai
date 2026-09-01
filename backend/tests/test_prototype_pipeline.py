@@ -27,6 +27,12 @@ class PrototypePipelineTest(unittest.TestCase):
             "UNVERIFIED_EVIDENCE",
             result["findings"][0]["verification"]["issues"][0]["code"],
         )
+        explanation = result["findings"][0]["explanation"]
+        self.assertTrue(explanation["why_flagged"])
+        self.assertTrue(explanation["possible_impact"])
+        self.assertTrue(explanation["review_points"])
+        self.assertIn("검토용", explanation["disclaimer"])
+        self.assertNotIn("explanation", result["findings"][0]["rule_signal"])
 
     def test_arm_d_passes_only_with_retrieved_verified_evidence(self) -> None:
         evidence = [

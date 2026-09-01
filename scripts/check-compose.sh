@@ -10,6 +10,10 @@ fi
 
 echo "[compose] validating resolved configuration"
 docker compose config --quiet
+if grep -En 'FRONTEND_ORIGIN:.*\*' docker-compose.yml >/dev/null; then
+  echo "wildcard FRONTEND_ORIGIN is not allowed" >&2
+  exit 1
+fi
 
 echo "[compose] building and waiting for healthy long-running services"
 docker compose up --build --detach --wait
@@ -21,8 +25,11 @@ docker compose logs --no-color migrate corpus-init
 echo "[compose] verifying PostgreSQL, Redis, and Chroma read/write paths"
 docker compose exec -T backend python scripts/check_infrastructure.py
 
-echo "[compose] verifying host-facing API and frontend endpoints"
-curl --fail --silent --show-error http://127.0.0.1:8000/health/ready
-curl --fail --silent --show-error --output /dev/null http://127.0.0.1:3000/
+echo "[compose] verifying upload, analysis, polling, report, and deletion through frontend port 3000"
+docker compose run --rm --no-deps -T \
+  -v "$PWD/scripts:/smoke:ro" \
+  -v "$PWD/backend/tests/fixtures:/fixtures:ro" \
+  -e FRONTEND_SMOKE_ADDRESS=frontend:3000 \
+  backend python /smoke/check_frontend_proxy.py /fixtures/e2e-contract.txt
 
 echo "[compose] smoke verification passed; run 'make compose-logs' to follow logs"

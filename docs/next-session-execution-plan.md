@@ -7,10 +7,10 @@
 ## 2026-09-01 진행 업데이트
 
 - P0 완료: 공개 이력·비밀·고위험 의존성 검사, Dependabot, main 보호 규칙 적용
-- P1 코드 완료/런타임 pending: 9-service Compose, migration·corpus gate, smoke/log 명령,
-  정적 계약 테스트 구현. Docker·Colima 부재로 clean build와 restart E2E는 미실행
-- P2 코드 완료/런타임 pending: 로컬 PDFium+Tesseract OCR, page/pixel/time/quality gate,
-  암호화 PDF 차단, OCR 결과 PII masking 경계 테스트 구현. 실제 한국어 OCR E2E는 미실행
+- P1 완료: macOS Colima arm64에서 9-service clean build/recreate, migration·corpus gate,
+  PostgreSQL·Redis·Chroma read/write와 Frontend proxy 문서 lifecycle 검증. Windows WSL2 clean-room은 인계 단계에서 확인
+- P2 런타임 부분 완료: Docker 이미지의 PDFium+한국어 Tesseract 설치와 page/pixel/time/quality gate,
+  암호화 PDF 차단, OCR 결과 PII masking 경계 테스트 구현. 실제 한국어 스캔 PDF E2E는 미실행
 - P3 안전 경계 완료/실제 호출 pending: outbound PII·schema·evidence·timeout·rate-limit,
   단일 retry budget, 분석당 8-call 상한, non-content telemetry와 1-call 점검 명령 구현
 - P5 평가 배선 완료/실제 평가 pending: 자유서술·신원 필드 차단 annotation 계약,
@@ -31,8 +31,8 @@
 - 전체 마스킹 문서 뷰어와 6-case PII 회귀셋 구현
 - 실제 Redis 성공 경로와 retry 2회 → DLQ → `needs_review` 검증
 - 약관법 7개 조문 verified corpus와 로컬 hashing/MiniLM 검색 평가 구현
-- Backend 53 tests, Frontend 4 tests, production build, PDF browser E2E 통과
-- 미완료 핵심: OCR, 실제 Claude, 전체 Compose, 4개 corpus 확대, 전문가 평가,
+- Backend 87 tests, Frontend 10 tests, production build, Compose Frontend proxy E2E 통과
+- 미완료 핵심: 실제 한국어 스캔 OCR, 실제 Claude, Windows WSL2 clean-room, 4개 corpus 확대, 전문가 평가,
   은행 비교 데이터, 운영 키 회전·관리자 UI·장애 복구
 
 ## 가장 효율적인 실행 순서

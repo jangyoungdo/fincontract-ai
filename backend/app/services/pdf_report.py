@@ -13,14 +13,7 @@ from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 from reportlab.pdfgen.canvas import Canvas
-from reportlab.platypus import (
-    PageBreak,
-    Paragraph,
-    SimpleDocTemplate,
-    Spacer,
-    Table,
-    TableStyle,
-)
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 FONT_NAME = "HYSMyeongJo-Medium"
 
@@ -34,8 +27,27 @@ def _draw_footer(canvas: Canvas, document: SimpleDocTemplate) -> None:
     canvas.restoreState()
 
 
+def _paragraph(value: object, style: ParagraphStyle) -> Paragraph:
+    return Paragraph(escape(str(value or "")), style)
+
+
+def _highlighted_source(finding: dict, style: ParagraphStyle) -> Paragraph:
+    """Highlight only the verified match span in privacy-masked clause text."""
+    source = finding.get("source", {})
+    text = str(source.get("masked_text", ""))
+    span = source.get("match_span", [0, 0])
+    try:
+        start, end = int(span[0]), int(span[1])
+    except (IndexError, TypeError, ValueError):
+        start, end = 0, 0
+    if 0 <= start < end <= len(text):
+        markup = f"{escape(text[:start])}<b><u>{escape(text[start:end])}</u></b>{escape(text[end:])}"
+        return Paragraph(markup, style)
+    return _paragraph(text, style)
+
+
 def build_pdf_report(analysis_id: str, result: dict | None) -> bytes:
-    """Render a self-contained Korean review report without embedding source files."""
+    """Render explanations and citations without embedding the uploaded source file."""
     pdfmetrics.registerFont(UnicodeCIDFont(FONT_NAME))
     buffer = BytesIO()
     document = SimpleDocTemplate(
@@ -49,10 +61,13 @@ def build_pdf_report(analysis_id: str, result: dict | None) -> bytes:
         author="FinContract AI",
     )
     styles = getSampleStyleSheet()
-    body = ParagraphStyle("KoreanBody", parent=styles["BodyText"], fontName=FONT_NAME, fontSize=9, leading=14)
-    heading = ParagraphStyle("KoreanHeading", parent=body, fontSize=14, leading=20, spaceBefore=10, spaceAfter=6)
-    title = ParagraphStyle("KoreanTitle", parent=heading, fontSize=22, leading=28, alignment=TA_CENTER, textColor=colors.HexColor("#172554"))
+    body = ParagraphStyle("KoreanBody", parent=styles["BodyText"], fontName=FONT_NAME, fontSize=9, leading=14, spaceAfter=4)
+    heading = ParagraphStyle("KoreanHeading", parent=body, fontSize=14, leading=20, spaceBefore=12, spaceAfter=6, textColor=colors.HexColor("#172554"))
+    subheading = ParagraphStyle("KoreanSubheading", parent=body, fontSize=10, leading=15, spaceBefore=7, spaceAfter=3, textColor=colors.HexColor("#1E3A8A"))
+    title = ParagraphStyle("KoreanTitle", parent=heading, fontSize=22, leading=28, alignment=TA_CENTER)
     warning = ParagraphStyle("KoreanWarning", parent=body, textColor=colors.HexColor("#9A3412"), backColor=colors.HexColor("#FFF7ED"), borderPadding=8)
+    quote = ParagraphStyle("KoreanQuote", parent=body, backColor=colors.HexColor("#F1F5F9"), borderColor=colors.HexColor("#2563EB"), borderWidth=1, borderPadding=8)
+    revision = ParagraphStyle("KoreanRevision", parent=body, backColor=colors.HexColor("#EFF6FF"), borderPadding=8)
 
     safe_result = result or {}
     findings = safe_result.get("findings", [])
@@ -63,8 +78,8 @@ def build_pdf_report(analysis_id: str, result: dict | None) -> bytes:
         Spacer(1, 5 * mm),
         Table(
             [
-                ["분석 ID", escape(analysis_id)],
-                ["상태", escape(str(safe_result.get("disposition", "unknown")))],
+                ["분석 ID", _paragraph(analysis_id, body)],
+                ["상태", _paragraph(safe_result.get("disposition", "unknown"), body)],
                 ["조항 수", str(safe_result.get("clause_count", 0))],
                 ["검토 신호", str(len(findings))],
             ],
@@ -78,17 +93,69 @@ def build_pdf_report(analysis_id: str, result: dict | None) -> bytes:
             ]),
         ),
     ]
-    for index, finding in enumerate(findings, start=1):
+
+    if not findings:
         story.extend([
-            Paragraph(f"{index}. {escape(str(finding.get('rule_signal', {}).get('category', '검토 신호')))}", heading),
-            Paragraph(escape(str(finding.get("source", {}).get("masked_text", ""))), body),
-            Spacer(1, 2 * mm),
-            Paragraph(escape(str((finding.get("assessment") or {}).get("summary", finding.get("rule_signal", {}).get("rationale", "")))), body),
-            Paragraph(f"근거 검증: {escape(str(finding.get('verification', {}).get('status', 'not_run')))}", body),
+            Paragraph("실험 규칙 신호 없음", heading),
+            Paragraph("현재 8개 실험 규칙에서 위험 신호가 탐지되지 않았습니다. 이는 계약의 안전성이나 적법성을 보장하지 않습니다.", warning),
         ])
-        for evidence in finding.get("evidence", []):
-            story.append(Paragraph(f"- {escape(str(evidence.get('title', '근거')))} ({escape(str(evidence.get('status', 'unknown')))})", body))
-        if index < len(findings) and index % 3 == 0:
-            story.append(PageBreak())
+
+    for index, finding in enumerate(findings, start=1):
+        signal = finding.get("rule_signal", {})
+        explanation = finding.get("explanation", {})
+        clause_number = finding.get("clause", {}).get("number")
+        prefix = f"제{clause_number}조 · " if clause_number else ""
+        story.extend([
+            Paragraph(f"{index}. {escape(prefix + str(signal.get('rule_name', signal.get('category', '검토 신호'))))}", heading),
+            Paragraph("정확히 탐지된 문구", subheading),
+            _highlighted_source(finding, quote),
+            Paragraph("왜 문제 후보인가", subheading),
+            _paragraph(explanation.get("why_flagged"), body),
+            Paragraph("예상되는 고객 영향", subheading),
+            _paragraph(explanation.get("possible_impact"), body),
+            Paragraph("반대 사정과 확인 조건", subheading),
+        ])
+        for point in explanation.get("review_points", []):
+            story.append(_paragraph(f"• {point}", body))
+        story.extend([
+            Paragraph("검토용 대안 조항", subheading),
+            _paragraph(explanation.get("suggested_revision"), revision),
+            _paragraph(explanation.get("disclaimer"), body),
+            Paragraph("법적 근거 후보", subheading),
+        ])
+        evidence_items = finding.get("evidence", [])
+        if not evidence_items:
+            story.append(_paragraph("검증된 근거를 검색하지 못했습니다. 법령 원문과 시행일을 별도로 확인하세요.", warning))
+        for evidence in evidence_items:
+            story.extend([
+                _paragraph(f"• {evidence.get('title', '근거')} · {evidence.get('authority', '기관 미상')} · {evidence.get('status', 'unknown')}", body),
+                _paragraph(evidence.get("quoted_excerpt", ""), quote),
+                _paragraph(f"원문: {evidence.get('source_url', '링크 없음')} · manifest {evidence.get('manifest_version', '미상')}", body),
+            ])
+
+        assessment = finding.get("assessment") or {}
+        if assessment:
+            story.extend([
+                Paragraph("AI 보충 검토", subheading),
+                _paragraph(assessment.get("summary"), body),
+                _paragraph(assessment.get("rationale"), body),
+            ])
+            for item in assessment.get("counter_considerations", []):
+                story.append(_paragraph(f"• 반대 고려사항: {item}", body))
+            for item in assessment.get("review_questions", []):
+                story.append(_paragraph(f"• 확인 질문: {item}", body))
+
+        verification = finding.get("verification", {})
+        grounding = finding.get("grounding", {})
+        story.extend([
+            Paragraph("검증 상세", subheading),
+            _paragraph(
+                f"상태 {verification.get('status', 'not_run')} · 규칙 {signal.get('rule_id', '미상')} / {signal.get('rule_version', '미상')} · corpus {grounding.get('corpus_version', '미상')}",
+                body,
+            ),
+        ])
+        for issue in verification.get("issues", []):
+            story.append(_paragraph(f"• {issue.get('code', 'VERIFY_ERROR')}: {issue.get('message', '')}", warning))
+
     document.build(story, onFirstPage=_draw_footer, onLaterPages=_draw_footer)
     return buffer.getvalue()

@@ -23,6 +23,21 @@ from app.services.text_extraction import extract_text
 
 router = APIRouter(prefix="/api/v1", tags=["documents"])
 
+RETRYABLE_ANALYSIS_ERRORS = {
+    "ANALYSIS_FAILED",
+    "ANALYSIS_RETRYING",
+    "ANALYSIS_QUEUE_UNAVAILABLE",
+    "LLM_RATE_LIMITED",
+    "LLM_UNAVAILABLE",
+    "OCR_TIMEOUT",
+    "API_UNREACHABLE",
+}
+
+
+def _is_retryable_error(error_code: str | None) -> bool | None:
+    """Expose a stable retry hint without returning exception text."""
+    return error_code in RETRYABLE_ANALYSIS_ERRORS if error_code else None
+
 
 def _document_response(document: DocumentRecord) -> DocumentResponse:
     return DocumentResponse.model_validate(document, from_attributes=True)
@@ -114,12 +129,26 @@ def create_analysis(document_id: str, request: AnalysisRequest, response: Respon
         )
         session.flush()
         if settings.use_redis:
+            # Make the analysis visible before publishing its ID. Publishing
+            # first lets an idle worker consume an uncommitted record and race
+            # the request transaction.
+            session.commit()
             try:
                 enqueue_analysis(get_redis(), analysis_id)
             except Exception as exc:
-                session.rollback()
+                record = session.get(AnalysisRecord, analysis_id)
+                if record:
+                    record.status = "failed"
+                    record.disposition = "needs_review"
+                    record.error_code = "ANALYSIS_QUEUE_UNAVAILABLE"
+                    add_audit_event(
+                        session,
+                        "analysis_failed",
+                        document_id=document_id,
+                        analysis_id=analysis_id,
+                    )
+                    session.commit()
                 raise HTTPException(status_code=503, detail="분석 큐를 사용할 수 없습니다.") from exc
-            session.commit()
             response.status_code = status.HTTP_202_ACCEPTED
             return AnalysisResponse(
                 id=record.id,
@@ -154,6 +183,7 @@ def create_analysis(document_id: str, request: AnalysisRequest, response: Respon
             experiment_arm=record.experiment_arm,
             result=json.loads(record.result_json) if record.result_json else None,
             error_code=record.error_code,
+            retryable=_is_retryable_error(record.error_code),
         )
 
 
@@ -178,6 +208,7 @@ def get_analysis(analysis_id: str) -> AnalysisResponse:
             experiment_arm=record.experiment_arm,
             result=json.loads(record.result_json) if record.result_json else None,
             error_code=record.error_code,
+            retryable=_is_retryable_error(record.error_code),
             progress=progress,
         )
 

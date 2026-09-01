@@ -57,6 +57,15 @@ def test_compose_keeps_sensitive_state_out_of_source_bind_mounts() -> None:
 def test_compose_healthchecks_probe_real_service_endpoints() -> None:
     """Reject process-only checks that could mark unusable dependencies healthy."""
     services = load_compose()["services"]
-    assert services["chroma"]["healthcheck"]["test"][-1].endswith("/api/v2/heartbeat")
+    assert "/api/v2/heartbeat" in services["chroma"]["healthcheck"]["test"][-1]
     assert "/health/ready" in services["backend"]["healthcheck"]["test"][-1]
     assert services["frontend"]["depends_on"]["backend"]["condition"] == "service_healthy"
+
+
+def test_frontend_uses_internal_backend_and_cors_is_not_wildcard() -> None:
+    """Keep browser traffic same-origin and reject temporary wildcard CORS."""
+    services = load_compose()["services"]
+    assert services["frontend"]["environment"]["BACKEND_INTERNAL_URL"] == "http://backend:8000"
+    assert services["backend"]["image"] == "fincontract-ai-backend:local"
+    assert "args" not in services["frontend"]["build"]
+    assert services["backend"]["environment"]["FRONTEND_ORIGIN"] != "*"
