@@ -33,6 +33,14 @@ class Settings(BaseSettings):
     upload_dir: Path = Path("./storage/uploads")
     report_dir: Path = Path("./storage/reports")
     max_upload_bytes: int = 10_485_760
+    pdf_max_pages: int = 50
+    ocr_enabled: bool = False
+    ocr_languages: str = "kor+eng"
+    ocr_dpi: int = 200
+    ocr_max_pixels_per_page: int = 8_000_000
+    ocr_timeout_seconds: int = 15
+    ocr_min_characters_per_page: int = 10
+    ocr_min_alnum_ratio: float = 0.25
     document_ttl_hours: int = 24
     document_encryption_key: str = Field(default="", repr=False)
     admin_audit_token: str = Field(default="", repr=False)

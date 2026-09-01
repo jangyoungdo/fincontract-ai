@@ -4,6 +4,14 @@
 대상 브랜치: `codex/full-stack-foundation`  
 상태 기준: `docs/implementation-matrix.md`
 
+## 2026-09-01 진행 업데이트
+
+- P0 완료: 공개 이력·비밀·고위험 의존성 검사, Dependabot, main 보호 규칙 적용
+- P1 코드 완료/런타임 pending: 9-service Compose, migration·corpus gate, smoke/log 명령,
+  정적 계약 테스트 구현. Docker·Colima 부재로 clean build와 restart E2E는 미실행
+- P2 코드 완료/런타임 pending: 로컬 PDFium+Tesseract OCR, page/pixel/time/quality gate,
+  암호화 PDF 차단, OCR 결과 PII masking 경계 테스트 구현. 실제 한국어 OCR E2E는 미실행
+
 ## 목표
 
 남은 작업을 단순 기능 추가가 아니라 아래 네 가지 완료 조건으로 닫는다.

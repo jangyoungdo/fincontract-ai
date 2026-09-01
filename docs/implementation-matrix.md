@@ -4,13 +4,13 @@
 
 | 레이어 | 구성요소 | 구현 상태 | 실행 검증 | 남은 제한 |
 |---|---|---:|---:|---|
-| Frontend | PDF 업로드 | implemented | TXT/PDF browser E2E + PDF component workflow verified | 스캔 PDF는 OCR 정책 필요 |
+| Frontend | PDF 업로드 | implemented | TXT/PDF browser E2E + PDF component workflow verified | 스캔 PDF browser E2E pending |
 | Frontend | 분석 대시보드 | implemented | browser E2E, unit/build verified | mock 분석만 연결 |
 | Frontend | 원문 뷰어 | implemented | masked full-document + finding highlight unit/build verified | 마스킹 전 원문은 정책상 미제공 |
 | Frontend | 은행 비교 | partial | API fail-closed + build verified | 검증된 비교 데이터 미확보로 결과 미제공 |
 | Backend | FastAPI Gateway | implemented | API integration + worker status verified | sync/Redis async 전환은 환경 설정 |
-| Backend | PDF/DOCX/TXT 처리 | implemented | TXT/PDF browser E2E, PDF/DOCX/table API verified, scanned PDF `OCR_REQUIRED` verified | 실제 OCR 변환과 DOCX browser E2E 추가 필요 |
-| Backend | PII 마스킹 | implemented | 6-case regression: 연락처·신분·금융식별자·문맥형 이름/주소·오탐 verified | OCR 결과 PII는 OCR 도입 후 별도 검증 필요 |
+| Backend | PDF/DOCX/TXT 처리 | implemented | native PDF/DOCX/table + OCR policy 8 tests, page/pixel/time/quality/encryption fail-closed verified | 실제 한국어 Tesseract·회전·표 browser E2E pending |
+| Backend | PII 마스킹 | implemented | 6-case regression + injected OCR 주민번호 masking boundary verified | 실제 OCR 오인식 변형 회귀셋 pending |
 | Backend | 조항 분리 | implemented | paragraph + DOCX table integration verified | PDF 복잡 표 구조 복원 제외 |
 | Backend | 위험도 판정 | prototype | 8-rule unit verified | 합성 데이터, 전문가 검토 미완료 |
 | Backend | LLM 분석 | partial | fake-provider E2E, structured-output contract, opt-in/fail-closed verified | 실제 Claude 키·연결 미검증 |

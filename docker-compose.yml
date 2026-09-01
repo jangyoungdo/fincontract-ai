@@ -78,6 +78,8 @@ services:
       USE_REDIS: "true"
       REDIS_URL: redis://redis:6379/0
       LLM_PROVIDER: fake
+      OCR_ENABLED: "true"
+      OCR_LANGUAGES: kor+eng
       UPLOAD_DIR: /data/uploads
       REPORT_DIR: /data/reports
       DOCUMENT_ENCRYPTION_KEY: ${DOCUMENT_ENCRYPTION_KEY:?set DOCUMENT_ENCRYPTION_KEY}
@@ -112,6 +114,8 @@ services:
       USE_REDIS: "true"
       REDIS_URL: redis://redis:6379/0
       LLM_PROVIDER: fake
+      OCR_ENABLED: "true"
+      OCR_LANGUAGES: kor+eng
       UPLOAD_DIR: /data/uploads
       REPORT_DIR: /data/reports
       DOCUMENT_ENCRYPTION_KEY: ${DOCUMENT_ENCRYPTION_KEY:?set DOCUMENT_ENCRYPTION_KEY}

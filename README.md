@@ -160,6 +160,12 @@ backend/.venv/bin/python -c "from cryptography.fernet import Fernet; print(Ferne
 `make compose-check`를 실행합니다. 검증 후 컨테이너는 로그 확인을 위해 유지되며
 `make compose-logs`로 Backend·worker·retention 로그를 계속 볼 수 있습니다.
 
+Compose에서는 PDFium 렌더링과 한국어·영어 Tesseract OCR이 활성화됩니다. 페이지 수,
+페이지별 픽셀 수, 처리시간, 최소 문자수와 영숫자 비율을 넘지 못한 문서는 각각 안정된
+`PDF_*` 또는 `OCR_*` 오류 코드로 중단됩니다. OCR 텍스트는 메모리에서만 처리되고 기존
+PII 마스킹을 통과한 뒤에만 검색·분석 경계로 이동합니다. 이미지 빌드 로그에는 설치된
+Tesseract 버전과 한국어 모델 SHA-256이 남습니다.
+
 Redis를 활성화한 환경에서는 `make run-worker`로 분석 ID만 전달하는 worker를 별도 실행합니다. 진행 상태는 Redis에 한 시간만 보관하며 원문이나 추출 텍스트는 큐에 넣지 않습니다.
 
 ## 주요 문서

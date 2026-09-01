@@ -2,6 +2,11 @@ FROM python:3.12-slim AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 WORKDIR /app
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-kor \
+    && tesseract --version \
+    && sha256sum /usr/share/tesseract-ocr/5/tessdata/kor.traineddata \
+    && rm -rf /var/lib/apt/lists/*
 COPY pyproject.toml ./
 COPY app ./app
 COPY scripts ./scripts
