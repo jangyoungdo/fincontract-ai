@@ -1,11 +1,110 @@
 from __future__ import annotations
 
 from io import BytesIO
+from typing import Any
 
 from docx import Document
 from docx.table import Table
 from docx.text.paragraph import Paragraph
 from pypdf import PdfReader
+
+from app.config import get_settings
+
+
+def _is_usable_ocr_text(text: str, minimum_characters: int, minimum_alnum_ratio: float) -> bool:
+    """Reject empty or mostly-symbol OCR output before it reaches analysis."""
+    compact = "".join(character for character in text if not character.isspace())
+    if len(compact) < minimum_characters:
+        return False
+    alnum_count = sum(character.isalnum() for character in compact)
+    return alnum_count / len(compact) >= minimum_alnum_ratio
+
+
+def _ocr_pdf_pages(data: bytes, page_indexes: list[int], settings: Any) -> dict[int, str]:
+    """Render selected PDF pages in memory and run bounded local Tesseract OCR."""
+    try:
+        import pypdfium2 as pdfium
+        import pytesseract
+    except ImportError as exc:
+        raise ValueError("OCR_UNAVAILABLE: 로컬 OCR 구성요소를 불러올 수 없습니다.") from exc
+
+    document = pdfium.PdfDocument(data)
+    extracted: dict[int, str] = {}
+    scale = settings.ocr_dpi / 72
+    try:
+        for page_index in page_indexes:
+            page = document[page_index]
+            try:
+                width, height = page.get_size()
+                pixel_count = int(width * scale) * int(height * scale)
+                if pixel_count > settings.ocr_max_pixels_per_page:
+                    raise ValueError("OCR_PIXEL_LIMIT: OCR 페이지 픽셀 제한을 초과했습니다.")
+                bitmap = page.render(scale=scale)
+                try:
+                    with bitmap.to_pil() as image:
+                        try:
+                            text = pytesseract.image_to_string(
+                                image,
+                                lang=settings.ocr_languages,
+                                config="--oem 1 --psm 6",
+                                timeout=settings.ocr_timeout_seconds,
+                            )
+                        except pytesseract.pytesseract.TesseractNotFoundError as exc:
+                            raise ValueError(
+                                "OCR_UNAVAILABLE: Tesseract 실행 파일을 찾을 수 없습니다."
+                            ) from exc
+                        except pytesseract.pytesseract.TesseractError as exc:
+                            raise ValueError(
+                                "OCR_UNAVAILABLE: Tesseract 언어 모델을 사용할 수 없습니다."
+                            ) from exc
+                        except RuntimeError as exc:
+                            raise ValueError(
+                                "OCR_TIMEOUT: OCR 페이지 처리 시간을 초과했습니다."
+                            ) from exc
+                finally:
+                    bitmap.close()
+            finally:
+                page.close()
+            cleaned = text.replace("\x00", "").strip()
+            if not _is_usable_ocr_text(
+                cleaned,
+                settings.ocr_min_characters_per_page,
+                settings.ocr_min_alnum_ratio,
+            ):
+                raise ValueError("OCR_LOW_CONFIDENCE: OCR 텍스트 품질 기준을 통과하지 못했습니다.")
+            extracted[page_index] = cleaned
+    finally:
+        document.close()
+    return extracted
+
+
+def _extract_pdf_text(data: bytes) -> str:
+    """Combine native page text with local OCR only for pages that need it."""
+    settings = get_settings()
+    reader = PdfReader(BytesIO(data))
+    if reader.is_encrypted:
+        raise ValueError("PDF_ENCRYPTED: 암호화된 PDF는 처리할 수 없습니다.")
+    if len(reader.pages) > settings.pdf_max_pages:
+        raise ValueError("PDF_PAGE_LIMIT: PDF 페이지 제한을 초과했습니다.")
+
+    page_texts = [(page.extract_text() or "").strip() for page in reader.pages]
+    native_text_exists = any(page_texts)
+    ocr_indexes: list[int] = []
+    for index, (page, text) in enumerate(zip(reader.pages, page_texts, strict=True)):
+        if text:
+            continue
+        # Blank pages inside an otherwise readable PDF are harmless. Image-only
+        # pages and wholly non-text PDFs require OCR so content is never dropped.
+        has_images = bool(list(page.images))
+        if has_images or not native_text_exists:
+            ocr_indexes.append(index)
+
+    if ocr_indexes:
+        if not settings.ocr_enabled:
+            raise ValueError("OCR_REQUIRED: 스캔 PDF에는 로컬 OCR이 필요합니다.")
+        for index, text in _ocr_pdf_pages(data, ocr_indexes, settings).items():
+            page_texts[index] = text
+    return "\n".join(text for text in page_texts if text)
 
 
 def extract_text(data: bytes, extension: str, max_characters: int = 200_000) -> str:
@@ -13,14 +112,7 @@ def extract_text(data: bytes, extension: str, max_characters: int = 200_000) -> 
     if extension == ".txt":
         text = data.decode("utf-8")
     elif extension == ".pdf":
-        reader = PdfReader(BytesIO(data))
-        if len(reader.pages) > 200:
-            raise ValueError("PDF 페이지 제한을 초과했습니다.")
-        text = "\n".join(page.extract_text() or "" for page in reader.pages)
-        if not text.strip():
-            raise ValueError(
-                "OCR_REQUIRED: 텍스트가 없는 스캔 PDF입니다. OCR 처리 후 다시 업로드하세요."
-            )
+        text = _extract_pdf_text(data)
     elif extension == ".docx":
         document = Document(BytesIO(data))
         blocks = []
