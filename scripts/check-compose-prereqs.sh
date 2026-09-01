@@ -51,7 +51,7 @@ for port in 3000 8000 8001; do
 done
 
 docker compose config --quiet
-if grep -Eq '^[[:space:]]*FRONTEND_ORIGIN:[[:space:]]*["'"']?\*["'"']?[[:space:]]*$' docker-compose.yml; then
+if grep -Eq 'FRONTEND_ORIGIN:.*\*' docker-compose.yml; then
   echo "[fail] wildcard FRONTEND_ORIGIN is not allowed" >&2
   exit 1
 fi
