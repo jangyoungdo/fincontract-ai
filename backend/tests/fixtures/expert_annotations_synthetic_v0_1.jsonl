@@ -1,0 +1,6 @@
+{"case_id":"blind-case-001","reviewer_id":"reviewer-a","risk_level":"high","evidence_ids":["synthetic:1"],"reason_codes":["UNILATERAL_CHANGE"],"review_question_codes":["CHECK_NEGOTIATION"],"blinded":true}
+{"case_id":"blind-case-001","reviewer_id":"reviewer-b","risk_level":"high","evidence_ids":["synthetic:1"],"reason_codes":["UNILATERAL_CHANGE"],"review_question_codes":["CHECK_NEGOTIATION"],"blinded":true}
+{"case_id":"blind-case-002","reviewer_id":"reviewer-a","risk_level":"low","evidence_ids":["synthetic:2"],"reason_codes":["LIMITED_SCOPE"],"review_question_codes":["CHECK_NOTICE"],"blinded":true}
+{"case_id":"blind-case-002","reviewer_id":"reviewer-b","risk_level":"medium","evidence_ids":["synthetic:2"],"reason_codes":["MISSING_CONTEXT"],"review_question_codes":["CHECK_NOTICE"],"blinded":true}
+{"case_id":"blind-case-003","reviewer_id":"reviewer-a","risk_level":"none","evidence_ids":[],"reason_codes":["NO_SIGNAL"],"review_question_codes":[],"blinded":true}
+{"case_id":"blind-case-003","reviewer_id":"reviewer-b","risk_level":"none","evidence_ids":[],"reason_codes":["NO_SIGNAL"],"review_question_codes":[],"blinded":true}

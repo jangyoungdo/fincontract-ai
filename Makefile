@@ -1,4 +1,4 @@
-.PHONY: setup-backend setup-frontend test-backend test-frontend frontend-check api-check e2e failure-e2e migrate retention run-worker run-backend run-frontend infra-check ingest-demo ingest-public evaluate-public verify-index compose-check compose-logs claude-check
+.PHONY: setup-backend setup-frontend test-backend test-frontend frontend-check api-check e2e failure-e2e migrate retention run-worker run-backend run-frontend infra-check ingest-demo ingest-public evaluate-public verify-index compose-check compose-logs claude-check evaluate-expert-demo
 
 PYTHON := backend/.venv/bin/python
 
@@ -63,3 +63,6 @@ compose-logs:
 
 claude-check:
 	cd backend && PYTHONPATH=. .venv/bin/python scripts/check_anthropic.py
+
+evaluate-expert-demo:
+	cd backend && PYTHONPATH=. .venv/bin/python scripts/evaluate_experts.py tests/fixtures/expert_annotations_synthetic_v0_1.jsonl
