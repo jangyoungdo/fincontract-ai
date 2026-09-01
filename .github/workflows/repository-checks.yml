@@ -42,12 +42,23 @@ jobs:
           bash -n scripts/setup-dev.sh
           bash -n scripts/new-worktree.sh
           bash -n scripts/check-compose.sh
+          bash -n scripts/check-wsl-environment.sh
+          bash -n scripts/check-compose-prereqs.sh
+          bash -n scripts/prepare-local-env.sh
+          bash -n scripts/run-baseline.sh
+          bash -n scripts/collect-diagnostics.sh
           python -m py_compile backend/scripts/check_anthropic.py
+          python -m py_compile backend/scripts/evaluate_rule_baseline.py
           python -m py_compile backend/scripts/evaluate_experts.py
           bash -n .githooks/pre-push
           test -x scripts/setup-dev.sh
           test -x scripts/new-worktree.sh
           test -x scripts/check-compose.sh
+          test -x scripts/check-wsl-environment.sh
+          test -x scripts/check-compose-prereqs.sh
+          test -x scripts/prepare-local-env.sh
+          test -x scripts/run-baseline.sh
+          test -x scripts/collect-diagnostics.sh
           test -x backend/scripts/check_anthropic.py
           test -x backend/scripts/evaluate_experts.py
           test -x .githooks/pre-push
@@ -70,6 +81,7 @@ jobs:
           test -f prompts/project_scaffolding_prompt_v2.md
           test -f docs/architecture.md
           test -f docs/git-workflow.md
+          test -f docs/windows-wsl2-handoff.md
           test -f CONTRIBUTING.md
           test -f AGENTS.md
           test -f SECURITY.md

@@ -117,6 +117,11 @@ Infrastructure         Docker Compose · CI · 비밀정보 관리 · 관측성
 
 ## 로컬 전체 실행
 
+다른 Windows 11 노트북에서 환경을 처음 재현하는 경우에는 명령을 한꺼번에 실행하지 말고
+[Windows 11 + WSL2 단계별 인계 가이드](docs/windows-wsl2-handoff.md)의 체크포인트를 순서대로
+확인합니다. 이 경로는 Docker Desktop의 WSL2 엔진에서 소스를 직접 빌드하며 사전 빌드 이미지를
+별도로 배포하지 않습니다.
+
 Docker가 없는 환경에서도 Backend와 Frontend를 각각 검증할 수 있습니다.
 
 ```bash
@@ -141,7 +146,7 @@ make run-backend
 make run-frontend
 ```
 
-그 다음 `http://localhost:3000`에서 TXT, PDF 또는 DOCX를 업로드합니다. 공개 법령 코퍼스는 약관법 7개 조문으로 제한되어 있고 실제 Claude 연결은 기본적으로 비활성화되어 있으므로, 화면은 근거 범위와 fake-provider 분석 상태를 구분해 표시합니다.
+그 다음 `http://localhost:3000`에서 TXT, PDF 또는 DOCX를 업로드합니다. 브라우저는 Backend 포트에 직접 접속하지 않고 현재 Frontend 주소의 `/api/v1`만 호출합니다. Next.js 서버는 `BACKEND_INTERNAL_URL`(로컬 기본값 `http://127.0.0.1:8000`, Compose `http://backend:8000`)을 통해 Backend로 전달하므로 `127.0.0.1`, LAN IP 또는 터널·프리뷰 도메인으로 Frontend에 접속해도 별도의 브라우저 API 주소 변경이 필요하지 않습니다. 공개 법령 코퍼스는 약관법 7개 조문으로 제한되어 있고 실제 Claude 연결은 기본적으로 비활성화되어 있으므로, 화면은 결정론적 규칙 설명과 fake-provider 보충 분석을 구분해 표시합니다.
 
 Docker 런타임이 준비된 경우 다음 명령으로 PostgreSQL, Redis, ChromaDB, Backend와 Frontend를 함께 기동합니다.
 
@@ -156,7 +161,7 @@ docker compose up --build
 backend/.venv/bin/python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
-전체 Compose 계약과 인프라 read/write, API·프런트엔드 응답을 한 번에 검증하려면
+전체 Compose 계약과 인프라 read/write, Frontend 프록시를 통한 업로드·분석·PDF·삭제를 한 번에 검증하려면
 `make compose-check`를 실행합니다. 검증 후 컨테이너는 로그 확인을 위해 유지되며
 `make compose-logs`로 Backend·worker·retention 로그를 계속 볼 수 있습니다.
 

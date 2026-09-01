@@ -21,6 +21,7 @@ class RuleMatch:
     """One reproducible review signal with a source span and version metadata."""
     rule_id: str
     rule_version: str
+    rule_name: str
     category: str
     matched_excerpt: str
     match_start: int
@@ -28,18 +29,21 @@ class RuleMatch:
     signal_strength: str
     rationale: str
     legal_basis_candidates: List[str]
+    explanation: Dict[str, Any]
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert the immutable match to the API finding schema."""
         return {
             "rule_id": self.rule_id,
             "rule_version": self.rule_version,
+            "rule_name": self.rule_name,
             "category": self.category,
             "matched_excerpt": self.matched_excerpt,
             "match_span": [self.match_start, self.match_end],
             "signal_strength": self.signal_strength,
             "rationale": self.rationale,
             "legal_basis_candidates": self.legal_basis_candidates,
+            "explanation": self.explanation,
         }
 
 
@@ -73,6 +77,7 @@ class RuleEngine:
                 RuleMatch(
                     rule_id=rule["id"],
                     rule_version=self.version,
+                    rule_name=rule["name"],
                     category=rule["category"],
                     matched_excerpt=positive.group(0),
                     match_start=positive.start(),
@@ -83,6 +88,7 @@ class RuleEngine:
                         "위법성 결론이 아니며 예외와 계약 전체 문맥을 검토해야 함."
                     ),
                     legal_basis_candidates=list(rule["legal_basis_candidates"]),
+                    explanation=dict(rule["explanation"]),
                 )
             )
         return matches

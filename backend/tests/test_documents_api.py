@@ -6,9 +6,39 @@ from fastapi.testclient import TestClient
 from pypdf import PdfReader, PdfWriter
 
 from app.main import app
-from app.models import AuditEvent, DocumentRecord, get_session_factory
+from app.config import get_settings
+from app.models import AnalysisRecord, AuditEvent, DocumentRecord, get_session_factory
 
 SAMPLE = "제1조 은행은 필요하다고 인정하는 경우 서비스 내용을 일방적으로 변경할 수 있다."
+
+
+def test_analysis_record_is_committed_before_queue_publication(monkeypatch) -> None:
+    """Prevent an idle worker from consuming an ID hidden by the request transaction."""
+    published: list[str] = []
+
+    class CommitCheckingRedis:
+        def set(self, key: str, value: str, ex: int) -> None:
+            assert key and value and ex > 0
+
+        def rpush(self, key: str, analysis_id: str) -> None:
+            with get_session_factory()() as session:
+                assert session.get(AnalysisRecord, analysis_id) is not None
+            published.append(analysis_id)
+
+    settings = get_settings().model_copy(update={"use_redis": True})
+    monkeypatch.setattr("app.api.documents.get_settings", lambda: settings)
+    monkeypatch.setattr("app.api.documents.get_redis", CommitCheckingRedis)
+    with TestClient(app) as client:
+        uploaded = client.post(
+            "/api/v1/documents",
+            files={"file": ("queue-order.txt", SAMPLE.encode(), "text/plain")},
+        )
+        response = client.post(
+            f"/api/v1/documents/{uploaded.json()['id']}/analyses",
+            json={"experiment_arm": "A"},
+        )
+    assert response.status_code == 202
+    assert published == [response.json()["id"]]
 
 
 def test_txt_upload_analysis_report_and_delete() -> None:
@@ -43,6 +73,12 @@ def test_txt_upload_analysis_report_and_delete() -> None:
         assert pdf_report.headers["content-type"] == "application/pdf"
         reader = PdfReader(BytesIO(pdf_report.content))
         assert len(reader.pages) >= 1
+        report_text = "\n".join(page.extract_text() or "" for page in reader.pages)
+        assert "왜 문제 후보인가" in report_text
+        assert "예상되는 고객 영향" in report_text
+        assert "검토용 대안 조항" in report_text
+        assert "법적 근거 후보" in report_text
+        assert "검증 상세" in report_text
 
         deleted = client.delete(f"/api/v1/documents/{document_id}")
         assert deleted.status_code == 200

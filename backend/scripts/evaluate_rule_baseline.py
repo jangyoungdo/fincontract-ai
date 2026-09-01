@@ -2,16 +2,18 @@
 """Evaluate the deterministic baseline against JSONL cases."""
 
 import argparse
+import hashlib
 import json
+import os
 import sys
 from collections import defaultdict
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Dict
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_ROOT))
 
-from app.rules import RuleEngine  # noqa: E402
+from app.rules import RuleEngine
 
 
 def ratio(numerator: int, denominator: int) -> float:
@@ -27,7 +29,7 @@ def main() -> int:
     args = parser.parse_args()
 
     engine = RuleEngine()
-    counts: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    counts: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     cases = []
     dataset_is_synthetic = True
     with args.dataset.open(encoding="utf-8") as dataset_file:
@@ -56,9 +58,18 @@ def main() -> int:
         }
 
     result = {
+        "run_id": os.getenv("FINCONTRACT_RUN_ID", "manual"),
+        "executed_at_utc": datetime.now(UTC).isoformat(),
         "experiment": "A-rule-engine",
+        "provider": os.getenv("LLM_PROVIDER", "fake"),
+        "code_commit": os.getenv("FINCONTRACT_CODE_COMMIT", "unknown"),
+        "code_dirty": os.getenv("FINCONTRACT_CODE_DIRTY", "unknown").lower() == "true",
+        "container_image_id": os.getenv("FINCONTRACT_IMAGE_ID", "unknown"),
+        "container_architecture": os.getenv("FINCONTRACT_CONTAINER_ARCHITECTURE", "unknown"),
+        "platform": os.getenv("FINCONTRACT_PLATFORM", "unknown"),
         "ruleset_version": engine.version,
         "dataset": str(args.dataset),
+        "dataset_sha256": hashlib.sha256(args.dataset.read_bytes()).hexdigest(),
         "dataset_is_synthetic": dataset_is_synthetic,
         "case_count": len(cases),
         "metrics": metrics,

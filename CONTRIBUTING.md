@@ -18,6 +18,10 @@ git pull --ff-only
 
 자세한 내용은 [Git 협업 및 worktree 운영](docs/git-workflow.md)을 참고하세요.
 
+Windows 11 협업자는 먼저 [WSL2 단계별 인계 가이드](docs/windows-wsl2-handoff.md)를 완료해
+동일한 Compose 환경과 오프라인 기준선을 재현합니다. `.env`, 사용자 PDF와 `output/` 결과는
+브랜치나 PR에 포함하지 않습니다.
+
 `setup-dev.sh`는 이 저장소에만 fast-forward pull, 원격 정리, conflict resolution 재사용과 versioned Git hook을 설정합니다. 전역 Git 설정은 변경하지 않습니다.
 
 ## 2. 브랜치 이름

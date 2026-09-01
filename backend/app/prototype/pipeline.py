@@ -83,6 +83,9 @@ class PrototypePipeline:
 
         for index, match in enumerate(rule_matches, start=1):
             signal = match.to_dict()
+            # Explanations are deterministic rule metadata and remain useful even
+            # when the optional model provider is disabled or fails verification.
+            explanation = signal.pop("explanation")
             candidate_evidence = [
                 {
                     "evidence_id": f"candidate:{match.rule_id}:{basis_index}",
@@ -134,6 +137,7 @@ class PrototypePipeline:
                         "match_span": signal["match_span"],
                     },
                     "rule_signal": signal,
+                    "explanation": explanation,
                     "evidence": evidence,
                     "legal_basis_candidates": candidate_evidence,
                     "grounding": {

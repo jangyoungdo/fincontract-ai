@@ -8,6 +8,8 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_ROOT))
 
 from app.rules import RuleEngine  # noqa: E402
+from app.rules.rule_engine import DEFAULT_RULESET_PATH  # noqa: E402
+from app.llm.model_routing import DEFAULT_POLICY_PATH  # noqa: E402
 
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "loan_terms_synthetic_v0_1.jsonl"
@@ -35,6 +37,10 @@ class RuleEngineTest(unittest.TestCase):
         matches = self.engine.screen(self.cases[0]["text"], rule_ids=["UNKNOWN"])
         self.assertEqual([], matches)
 
+    def test_runtime_package_data_files_are_present(self) -> None:
+        self.assertTrue(DEFAULT_RULESET_PATH.is_file())
+        self.assertTrue(DEFAULT_POLICY_PATH.is_file())
+
     def test_all_eight_rules_have_a_synthetic_positive_case(self) -> None:
         cases = {
             "R01_EXCESSIVE_LIQUIDATED_DAMAGES": "고객은 손해의 발생 여부와 관계없이 위약금을 지급한다.",
@@ -50,6 +56,30 @@ class RuleEngineTest(unittest.TestCase):
         for rule_id, text in cases.items():
             with self.subTest(rule_id=rule_id):
                 self.assertIn(rule_id, {match.rule_id for match in self.engine.screen(text)})
+
+    def test_all_rules_have_complete_deterministic_explanations(self) -> None:
+        required = {
+            "why_flagged",
+            "possible_impact",
+            "review_points",
+            "suggested_revision",
+            "disclaimer",
+        }
+        self.assertEqual(8, len(self.engine.ruleset["rules"]))
+        for rule in self.engine.ruleset["rules"]:
+            with self.subTest(rule_id=rule["id"]):
+                explanation = rule["explanation"]
+                self.assertEqual(required, set(explanation))
+                self.assertTrue(explanation["review_points"])
+                self.assertTrue(all(str(value).strip() for value in explanation.values()))
+                self.assertIn("검토용 예시", explanation["disclaimer"])
+
+    def test_suggested_revisions_do_not_make_conclusive_legal_claims(self) -> None:
+        forbidden = ("위법하다", "적법하다", "무효이다", "반드시 승소")
+        for rule in self.engine.ruleset["rules"]:
+            revision = rule["explanation"]["suggested_revision"]
+            with self.subTest(rule_id=rule["id"]):
+                self.assertFalse(any(term in revision for term in forbidden))
 
 
 if __name__ == "__main__":

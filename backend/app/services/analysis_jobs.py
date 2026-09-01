@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -20,6 +21,7 @@ from .text_extraction import extract_text
 QUEUE_NAME = "fincontract:analysis:queue"
 DEAD_LETTER_QUEUE_NAME = "fincontract:analysis:dead-letter"
 PROGRESS_TTL_SECONDS = 60 * 60
+logger = logging.getLogger("fincontract.analysis_jobs")
 
 
 def progress_key(analysis_id: str) -> str:
@@ -98,6 +100,16 @@ def process_analysis(analysis_id: str, redis_client: Redis | None = None) -> Non
                 attempts = int(redis_client.incr(attempt_key(analysis_id)))
                 redis_client.expire(attempt_key(analysis_id), PROGRESS_TTL_SECONDS)
             retryable = getattr(exc, "retryable", True)
+            # Log only exception class and stable code. Exception messages can
+            # contain parser context and therefore are intentionally excluded.
+            logger.warning(
+                "analysis job failed analysis_id=%s exception_type=%s code=%s attempt=%s retryable=%s",
+                analysis_id,
+                type(exc).__name__,
+                getattr(exc, "code", "ANALYSIS_FAILED"),
+                attempts,
+                retryable,
+            )
             if redis_client and retryable and attempts < get_settings().worker_max_attempts:
                 record.status = "queued"
                 record.error_code = "ANALYSIS_RETRYING"

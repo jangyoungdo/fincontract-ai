@@ -31,7 +31,10 @@ services:
     volumes:
       - chroma-data:/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/api/v2/heartbeat"]
+      # The upstream Chroma image does not ship curl. Use Bash's TCP support
+      # to verify the heartbeat endpoint itself instead of checking only that
+      # the server process or port exists.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8000; printf 'GET /api/v2/heartbeat HTTP/1.0\r\nHost: localhost\r\n\r\n' >&3; grep -q '200 OK' <&3"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -67,6 +70,9 @@ services:
   # reports stay inside encrypted/application-managed named volumes.
   backend:
     build: ./backend
+    # A stable local tag lets reproducibility tools inspect the newly built
+    # image even while an older backend container is still being replaced.
+    image: fincontract-ai-backend:local
     environment:
       APP_ENV: development
       FRONTEND_ORIGIN: http://localhost:3000
@@ -152,8 +158,8 @@ services:
   frontend:
     build:
       context: ./frontend
-      args:
-        NEXT_PUBLIC_API_BASE: http://localhost:8000
+    environment:
+      BACKEND_INTERNAL_URL: http://backend:8000
     depends_on:
       backend: {condition: service_healthy}
     ports:

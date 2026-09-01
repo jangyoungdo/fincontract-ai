@@ -1,9 +1,39 @@
 "use client";
 
 import { FormEvent, ReactNode, useState } from "react";
-import { Analysis, Finding, deleteDocument, reportPdfUrl, uploadAndAnalyze, waitForAnalysis } from "@/lib/api";
+import {
+  Analysis,
+  ClientApiError,
+  Finding,
+  deleteDocument,
+  downloadReport,
+  getAnalysis,
+  uploadAndAnalyze,
+  waitForAnalysis,
+} from "@/lib/api";
 
 const stageLabels = ["문서 확인", "개인정보 보호", "위험 신호 탐색", "근거·결과 검토"];
+const statusLabels: Record<string, string> = {
+  queued: "분석 대기",
+  analyzing: "분석 중",
+  retrying: "자동 재시도 중",
+  completed: "분석 완료",
+  failed: "분석 실패",
+  pending: "준비 중",
+};
+const dispositionLabels: Record<string, string> = {
+  ready_for_review: "검토 준비",
+  needs_review: "추가 확인 필요",
+  no_signal: "실험 규칙 신호 없음",
+  pending: "분석 중",
+};
+const strengthLabels: Record<string, string> = { low: "낮은 신호", medium: "중간 신호", high: "높은 신호" };
+
+function renderSpan(text: string, span: [number, number], key: string): ReactNode {
+  const [start, end] = span;
+  if (start < 0 || end <= start || end > text.length) return text;
+  return <>{text.slice(0, start)}<mark key={key}>{text.slice(start, end)}</mark>{text.slice(end)}</>;
+}
 
 function renderMaskedDocument(text: string, findings: Finding[]): ReactNode[] {
   const ranges = findings
@@ -27,37 +57,139 @@ function renderMaskedDocument(text: string, findings: Finding[]): ReactNode[] {
   return nodes;
 }
 
-/**
- * Own the complete non-technical review workflow: upload, queued progress,
- * grounded findings, PDF export, and explicit source deletion.
- */
+function asClientError(reason: unknown, stage: ClientApiError["stage"]): ClientApiError {
+  if (reason instanceof ClientApiError) return reason;
+  return new ClientApiError(stage, "CLIENT_ERROR", "처리 중 오류가 발생했습니다. 잠시 후 다시 시도하세요.", true);
+}
+
+function FailurePanel({ analysis, onRetry }: { analysis: Analysis; onRetry: () => void }) {
+  return <section className="failure-panel" role="alert">
+    <h2>분석을 완료하지 못했습니다</h2>
+    <p>일시적인 오류일 수 있습니다. 기존 분석 ID로 상태를 다시 확인하거나 문서를 다시 업로드하세요.</p>
+    <p><b>오류 코드:</b> {analysis.error_code ?? "ANALYSIS_FAILED"}</p>
+    <p><b>재시도 가능:</b> {analysis.retryable ? "예" : "아니요 또는 수동 검토 필요"}</p>
+    <button onClick={onRetry}>상태 다시 확인</button>
+  </section>;
+}
+
+function FindingCard({ finding }: { finding: Finding }) {
+  const explanation = finding.explanation;
+  return <article className="finding">
+    <header>
+      <div><span className="tag">{strengthLabels[finding.rule_signal.signal_strength] ?? finding.rule_signal.signal_strength}</span><h3>{finding.clause ? `제${finding.clause.number}조 · ` : ""}{finding.rule_signal.rule_name ?? finding.rule_signal.category}</h3></div>
+      <span>검증 {finding.verification.status}</span>
+    </header>
+
+    <section className="finding-source">
+      <h4>정확히 탐지된 문구</h4>
+      <blockquote>{renderSpan(finding.source.masked_text, finding.source.match_span, `${finding.finding_id}-source`)}</blockquote>
+    </section>
+
+    <div className="explanation-grid">
+      <section><h4>왜 문제 후보인가</h4><p>{explanation.why_flagged}</p></section>
+      <section><h4>예상되는 고객 영향</h4><p>{explanation.possible_impact}</p></section>
+    </div>
+
+    <section>
+      <h4>반대 사정과 확인 조건</h4>
+      <ul>{explanation.review_points.map(point => <li key={point}>{point}</li>)}</ul>
+    </section>
+
+    <section className="revision">
+      <h4>검토용 대안 조항</h4>
+      <p>{explanation.suggested_revision}</p>
+      <small>{explanation.disclaimer}</small>
+    </section>
+
+    <section>
+      <h4>법적 근거 후보</h4>
+      {finding.evidence.length === 0 && <p className="muted">검증된 근거를 검색하지 못했습니다. 법령 원문과 시행일을 별도로 확인하세요.</p>}
+      {finding.evidence.map(item => <div className="evidence" key={item.evidence_id}>
+        <b>{item.title}</b>
+        {item.quoted_excerpt && <q>{item.quoted_excerpt}</q>}
+        <small>{item.authority} · {item.status}{item.relevance_score !== undefined ? ` · 관련도 ${item.relevance_score}` : ""}</small>
+        {item.source_url && <a href={item.source_url} target="_blank" rel="noreferrer noopener">법령 원문 열기</a>}
+      </div>)}
+    </section>
+
+    {finding.assessment && <details className="detail-block">
+      <summary>AI 보충 검토 ({finding.assessment.risk_level ?? "mock"})</summary>
+      <p>{finding.assessment.summary}</p>
+      {finding.assessment.rationale && <p>{finding.assessment.rationale}</p>}
+      <h5>반대 고려사항</h5><ul>{finding.assessment.counter_considerations.map(item => <li key={item}>{item}</li>)}</ul>
+      <h5>추가 확인 질문</h5><ul>{finding.assessment.review_questions.map(item => <li key={item}>{item}</li>)}</ul>
+    </details>}
+
+    <details className="detail-block">
+      <summary>전문가용 검증 상세</summary>
+      <dl>
+        <div><dt>규칙 ID</dt><dd>{finding.rule_signal.rule_id}</dd></div>
+        <div><dt>규칙 버전</dt><dd>{finding.rule_signal.rule_version ?? "미상"}</dd></div>
+        <div><dt>corpus 버전</dt><dd>{finding.grounding?.corpus_version ?? "확인 불가"}</dd></div>
+        <div><dt>근거 상태</dt><dd>{finding.grounding?.status ?? "확인 불가"}</dd></div>
+      </dl>
+      {(finding.verification.issues ?? []).map(issue => <p className="verification-issue" key={`${issue.code}-${issue.message}`}><b>{issue.code}</b> · {issue.message}</p>)}
+    </details>
+  </article>;
+}
+
+/** Own upload, progress, grounded review, report export, and explicit deletion. */
 export function AnalysisWorkspace() {
   const [file, setFile] = useState<File | null>(null);
   const [arm, setArm] = useState<"A" | "D">("D");
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<ClientApiError | null>(null);
+
+  async function continuePolling(target: Analysis) {
+    setBusy(true); setError(null); setAnalysis(target);
+    try { setAnalysis(await waitForAnalysis(target)); }
+    catch (reason) { setError(asClientError(reason, "poll")); }
+    finally { setBusy(false); }
+  }
 
   async function submit(event: FormEvent) {
-    // Reset stale results before starting a new document lifecycle.
     event.preventDefault();
     if (!file) return;
-    setBusy(true); setError(""); setAnalysis(null);
+    setBusy(true); setError(null); setAnalysis(null);
     try {
       const created = await uploadAndAnalyze(file, arm);
       setAnalysis(created);
       setAnalysis(await waitForAnalysis(created));
-    }
-    catch (reason) { setError(reason instanceof Error ? reason.message : "처리 중 오류가 발생했습니다."); }
+    } catch (reason) { setError(asClientError(reason, "upload")); }
     finally { setBusy(false); }
   }
 
-  async function remove() {
-    // Clear local state only after the backend confirms encrypted-file deletion.
+  async function refresh() {
     if (!analysis) return;
-    await deleteDocument(analysis.document_id);
-    setAnalysis(null); setFile(null);
+    setBusy(true); setError(null);
+    try {
+      const current = await getAnalysis(analysis.id);
+      if (current.status === "completed" || current.status === "failed") {
+        setAnalysis(current);
+        setBusy(false);
+      } else {
+        await continuePolling(current);
+      }
+    } catch (reason) { setError(asClientError(reason, "poll")); setBusy(false); }
   }
+
+  async function remove() {
+    if (!analysis) return;
+    try {
+      await deleteDocument(analysis.document_id);
+      setAnalysis(null); setFile(null); setError(null);
+    } catch (reason) { setError(asClientError(reason, "delete")); }
+  }
+
+  async function report() {
+    if (!analysis) return;
+    try { await downloadReport(analysis.id); }
+    catch (reason) { setError(asClientError(reason, "report")); }
+  }
+
+  const progressState = analysis?.progress?.state ?? analysis?.status;
+  const findings = analysis?.result?.findings ?? [];
 
   return <main>
     <section className="hero">
@@ -73,19 +205,26 @@ export function AnalysisWorkspace() {
       <h2>계약서 업로드</h2><p className="muted">TXT, PDF, DOCX · 최대 10MB · 원문은 분석 후 삭제할 수 있습니다.</p>
       <form onSubmit={submit}>
         <label className="drop"><input aria-label="계약서 파일" type="file" accept=".txt,.pdf,.docx" onChange={event => setFile(event.target.files?.[0] ?? null)} /><b>{file?.name ?? "파일을 선택하세요"}</b><span>마스킹 전 원문은 외부 모델이나 ChromaDB로 보내지 않습니다.</span></label>
-        <div className="actions"><label>실험군 <select value={arm} onChange={event => setArm(event.target.value as "A" | "D")}><option value="A">A · 규칙 기준선</option><option value="D">D · mock 분석·검증</option></select></label><button disabled={!file || busy}>{busy ? "분석 중…" : "분석 시작"}</button></div>
-      </form>{error && <p role="alert" className="error">{error}</p>}
+        <div className="actions"><label>실험군 <select value={arm} onChange={event => setArm(event.target.value as "A" | "D")}><option value="A">A · 규칙 기준선</option><option value="D">D · mock 분석·검증</option></select></label><button disabled={!file || busy}>{busy ? `${statusLabels[progressState ?? "analyzing"] ?? "분석 중"}…` : "분석 시작"}</button></div>
+      </form>
+      {error && <section role="alert" className="error-panel"><h3>{error.message}</h3>{error.retryable && analysis && <button onClick={refresh}>상태 다시 확인</button>}<details><summary>기술 정보</summary><p>단계 {error.stage} · 코드 {error.code}{error.httpStatus ? ` · HTTP ${error.httpStatus}` : ""}</p></details></section>}
     </section>
 
     {analysis && <section aria-live="polite">
-      <div className="panel summary"><div><span>상태</span><b>{analysis.disposition}</b></div><div><span>조항</span><b>{analysis.result?.clause_count ?? 0}</b></div><div><span>검토 신호</span><b>{analysis.result?.findings.length ?? 0}</b></div>{analysis.status === "completed" && <a className="report-link" href={reportPdfUrl(analysis.id)} download>PDF 리포트</a>}<button className="secondary" onClick={remove}>원문·결과 삭제</button></div>
+      <div className="panel summary">
+        <div><span>상태</span><b>{statusLabels[progressState ?? analysis.status] ?? analysis.status}</b></div>
+        <div><span>진행률</span><b>{analysis.progress?.percent ?? (analysis.status === "completed" ? 100 : 0)}%</b></div>
+        <div><span>결과</span><b>{dispositionLabels[analysis.disposition] ?? analysis.disposition}</b></div>
+        <div><span>검토 신호</span><b>{findings.length}</b></div>
+        {analysis.status === "completed" && <button className="report-link" onClick={report}>PDF 리포트</button>}
+        <button className="secondary" onClick={remove}>원문·결과 삭제</button>
+      </div>
+      {analysis.status === "failed" && <FailurePanel analysis={analysis} onRetry={refresh} />}
+      {analysis.disposition === "no_signal" && <section className="no-signal"><h2>실험 규칙 신호 없음</h2><p>현재 8개 실험 규칙에서 위험 신호가 탐지되지 않았습니다. 이는 계약의 안전성이나 적법성을 보장하지 않습니다.</p></section>}
       {(analysis.result?.warnings ?? []).map(warning => <p className="warning" key={warning}>{warning}</p>)}
-      {analysis.result?.document?.masked_text && <section className="panel source-viewer"><h2>마스킹된 전체 문서</h2><p className="muted">개인정보 치환 {analysis.result.document.pii_replacement_count}건 · 위험 신호를 강조 표시합니다.</p><pre>{renderMaskedDocument(analysis.result.document.masked_text, analysis.result.findings)}</pre></section>}
-      {(analysis.result?.findings ?? []).map(finding => <article className="finding" key={finding.finding_id}>
-        <header><div><span className="tag">{finding.rule_signal.signal_strength}</span><h3>{finding.rule_signal.category}</h3></div><span>검증 {finding.verification.status}</span></header>
-        <div className="columns"><div><h4>마스킹된 조항</h4><blockquote>{finding.source.masked_text}</blockquote><p>{finding.assessment?.summary ?? finding.rule_signal.rationale}</p></div><div><h4>법적 근거 후보</h4>{finding.evidence.map(item => <div className="evidence" key={item.evidence_id}><b>{item.title}</b><small>{item.status} · {item.authority}</small></div>)}<h4>확인 질문</h4><ul>{(finding.assessment?.review_questions ?? []).map(question => <li key={question}>{question}</li>)}</ul></div></div>
-      </article>)}
-      <section className="panel limitations"><h2>데이터 제공 범위</h2><p><b>원문 뷰어</b>는 개인정보를 치환한 전체 텍스트만 표시합니다. 마스킹 전 텍스트는 화면·검색·외부 모델로 전송하지 않습니다.</p><p><b>은행 비교</b>는 검증된 공개·허가 비교 데이터가 아직 없어 순위·추천·비교 결과를 제공하지 않습니다.</p><p><b>리포트</b>는 PDF와 JSON 형식의 검토 보조 자료이며, 법률 판단이나 상품 추천이 아닙니다.</p></section>
+      {analysis.result?.document?.masked_text && <section className="panel source-viewer"><h2>마스킹된 전체 문서</h2><p className="muted">개인정보 치환 {analysis.result.document.pii_replacement_count}건 · 실제 탐지 문구를 강조 표시합니다.</p><pre>{renderMaskedDocument(analysis.result.document.masked_text, findings)}</pre></section>}
+      {findings.map(finding => <FindingCard finding={finding} key={finding.finding_id} />)}
+      <section className="panel limitations"><h2>데이터 제공 범위</h2><p><b>원문 뷰어</b>는 개인정보를 치환한 전체 텍스트만 표시합니다. 마스킹 전 텍스트는 화면·검색·외부 모델로 전송하지 않습니다.</p><p><b>은행 비교</b>는 검증된 공개·허가 비교 데이터가 아직 없어 순위·추천·비교 결과를 제공하지 않습니다.</p><p><b>리포트</b>는 계약 검토 보조 자료이며, 법률 판단이나 상품 추천이 아닙니다.</p></section>
     </section>}
     {!analysis && <section className="panel limitations"><h2>은행 비교</h2><p>검증된 공개·허가 비교 데이터가 아직 없습니다. 따라서 순위나 추천은 표시하지 않습니다.</p></section>}
   </main>;

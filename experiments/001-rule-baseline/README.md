@@ -31,6 +31,16 @@ python3 backend/scripts/evaluate_rule_baseline.py \
 
 평가 결과 파일이 필요하면 `--output`으로 경로를 지정합니다. 생성 결과는 실행 환경에 따른 산출물이므로 기본적으로 커밋하지 않습니다.
 
+Windows/WSL2 인계 환경에서는 호스트 Python 대신 이미 빌드된 Backend 컨테이너를 사용합니다.
+
+```bash
+./scripts/run-baseline.sh
+```
+
+이 명령은 외부 LLM이 비활성화되었는지 먼저 확인하고 `output/runs/<run-id>/result.json`에
+커밋, 데이터셋 hash, 규칙·provider·컨테이너 메타데이터와 지표를 기록합니다. 사례 원문과
+로컬 비밀값은 기록하지 않습니다.
+
 ## 다음 단계
 
 1. 대상 약관의 공개 출처와 이용 조건을 manifest로 검증합니다.

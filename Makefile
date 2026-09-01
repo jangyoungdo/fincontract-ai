@@ -1,4 +1,4 @@
-.PHONY: setup-backend setup-frontend test-backend test-frontend frontend-check api-check e2e failure-e2e migrate retention run-worker run-backend run-frontend infra-check ingest-demo ingest-public evaluate-public verify-index compose-check compose-logs claude-check evaluate-expert-demo
+.PHONY: setup-backend setup-frontend test-backend test-frontend frontend-check api-check e2e failure-e2e migrate retention run-worker run-backend run-frontend infra-check ingest-demo ingest-public evaluate-public verify-index compose-check compose-logs wsl-check prepare-env baseline diagnostics claude-check evaluate-expert-demo
 
 PYTHON := backend/.venv/bin/python
 
@@ -60,6 +60,18 @@ compose-check:
 
 compose-logs:
 	docker compose logs --follow --tail=100 backend worker retention
+
+wsl-check:
+	./scripts/check-wsl-environment.sh
+
+prepare-env:
+	./scripts/prepare-local-env.sh
+
+baseline:
+	./scripts/run-baseline.sh
+
+diagnostics:
+	./scripts/collect-diagnostics.sh
 
 claude-check:
 	cd backend && PYTHONPATH=. .venv/bin/python scripts/check_anthropic.py
