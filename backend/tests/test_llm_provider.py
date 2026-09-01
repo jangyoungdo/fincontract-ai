@@ -222,6 +222,65 @@ def test_openai_provider_uses_non_stored_structured_response() -> None:
     assert "content" not in provider.last_call_metadata()
 
 
+def test_openai_provider_reviews_masked_clause_context_with_strict_schema() -> None:
+    captured = {}
+
+    class Response:
+        status_code = 200
+
+        @staticmethod
+        def json():
+            return {
+                "id": "resp_context",
+                "model": "gpt-test-model",
+                "usage": {"input_tokens": 300, "output_tokens": 120},
+                "output": [
+                    {
+                        "type": "message",
+                        "content": [
+                            {
+                                "type": "output_text",
+                                "text": (
+                                    '{"candidates":[{"section_id":"article-7",'
+                                    '"rule_id":"R11_DEEMED_CONSENT",'
+                                    '"evidence_quote":"계속 사용하면 동의한 것으로 본다",'
+                                    '"rationale":"명시적 의사표시 없이 동의를 간주할 가능성",'
+                                    '"review_question":"거절 선택권이 있는가?",'
+                                    '"confidence":"high","counter_considerations":[]}]}'
+                                ),
+                            }
+                        ],
+                    }
+                ],
+            }
+
+    class Client:
+        @staticmethod
+        def post(endpoint, **kwargs):
+            captured.update({"endpoint": endpoint, **kwargs})
+            return Response()
+
+    provider = OpenAIProvider.__new__(OpenAIProvider)
+    provider.client = Client()
+    provider._last_call = {}
+    result = provider.review_context(
+        [
+            {
+                "section_id": "article-7",
+                "label": "제7조",
+                "text": "계속 사용하면 동의한 것으로 본다",
+            }
+        ],
+        [{"rule_id": "R11_DEEMED_CONSENT", "name": "묵시적 동의"}],
+        "gpt-test-model",
+    )
+
+    assert result["candidates"][0]["rule_id"] == "R11_DEEMED_CONSENT"
+    assert captured["json"]["store"] is False
+    assert captured["json"]["text"]["format"]["name"] == "fincontract_context_review"
+    assert provider.last_call_metadata()["prompt_version"] == "context-review-v1"
+
+
 def test_openai_provider_blocks_unmasked_pii_before_network_call() -> None:
     class Client:
         @staticmethod

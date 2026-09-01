@@ -147,10 +147,11 @@ make run-frontend
 
 ### OpenAI Responses API 실험
 
-OpenAI 연결은 기존 규칙 탐지를 대체하지 않습니다. `findings[]`는 그대로 보존되고, API는
-마스킹된 규칙 신호와 검색된 근거만 받아 설명을 보강합니다. 원문 파일, 마스킹 전 텍스트,
-문서 전문은 전송하지 않으며 요청의 `store`는 `false`입니다. 따라서 이 단계는 API 연결·비용·
-근거 인용 품질을 확인하는 실험이고, 미탐 회수 성능을 높이는 실험은 아닙니다.
+OpenAI 연결은 기존 규칙 탐지를 대체하지 않습니다. `findings[]`는 그대로 보존됩니다.
+`openai-check`는 마스킹된 규칙 신호와 검색 근거만 받아 설명을 보강하고,
+`openai-context-check` 및 선택적 운영 문맥 검토는 마스킹된 분석 조문에서 규칙 미매핑 후보를
+`candidate_findings[]`에만 추가합니다. 원문 파일과 마스킹 전 텍스트는 전송하지 않으며 모든
+요청의 `store`는 `false`입니다.
 
 ChatGPT 또는 Codex 구독과 OpenAI API 사용량은 별개입니다. API 프로젝트에서 발급한 키를
 로컬 `.env`에만 넣고 다음 값을 변경합니다. 키를 저장소나 화면에 붙여 넣지 않습니다.
@@ -162,6 +163,8 @@ OPENAI_API_KEY=<OpenAI API 프로젝트에서 발급한 키>
 OPENAI_FAST_MODEL=gpt-5.6-luna
 OPENAI_BALANCED_MODEL=gpt-5.6-luna
 OPENAI_DEEP_MODEL=gpt-5.6-terra
+OPENAI_CONTEXT_REVIEW_ENABLED=true
+OPENAI_CONTEXT_MAX_CALLS=2
 LLM_MAX_CALLS_PER_ANALYSIS=8
 ```
 
@@ -169,6 +172,7 @@ LLM_MAX_CALLS_PER_ANALYSIS=8
 
 ```bash
 make openai-check
+make openai-context-check
 ```
 
 Docker에서는 환경변수를 읽도록 Backend와 worker를 다시 생성해야 합니다.
@@ -177,6 +181,11 @@ Docker에서는 환경변수를 읽도록 Backend와 worker를 다시 생성해�
 docker compose up -d --build backend worker
 docker compose logs --tail=100 backend worker
 ```
+
+`make openai-context-check`는 사용자 문서가 아닌 합성 조항 세 개로 규칙 밖 문맥 후보 탐지를
+한 번 확인합니다. 운영 문맥 검토는 `OPENAI_CONTEXT_REVIEW_ENABLED=true`일 때만 실행되고,
+정확한 원문 인용과 taxonomy 검증을 통과한 결과만 추가 후보로 표시됩니다. 상세 계약은
+[OpenAI 문맥 검토 후보 설계](docs/openai-context-review.md)를 참고합니다.
 
 실험을 중단하려면 `.env`에서 `LLM_PROVIDER=fake`, `ALLOW_EXTERNAL_LLM=false`로 되돌린 뒤
 같은 두 서비스를 다시 생성합니다. 이미 완료된 분석 결과는 변경되지 않습니다.

@@ -7,6 +7,7 @@ from app.prototype.pii import mask_pii, mask_pii_pages
 from .candidate_finder import CandidateFinder
 from .clause_segmenter import segment_clauses
 from .deterministic_summary import enrich_summaries
+from .openai_context_review import OpenAIContextReviewer
 from .retrieval import HybridRetriever
 
 
@@ -16,6 +17,9 @@ class DocumentAnalysisPipeline:
         self.prototype = PrototypePipeline()
         self.retriever = HybridRetriever()
         self.candidates = CandidateFinder(self.prototype.rules)
+        self.context_reviewer = OpenAIContextReviewer(
+            self.prototype.provider, self.prototype.rules
+        )
 
     def run(
         self,
@@ -58,7 +62,12 @@ class DocumentAnalysisPipeline:
         sections = segment_clauses(document_masking.masked_text)
         clauses = [section for section in sections if section.analyzable]
         results = []
-        remaining_provider_calls = settings.llm_max_calls_per_analysis
+        context_call_reserve = (
+            min(settings.openai_context_max_calls, settings.llm_max_calls_per_analysis)
+            if evaluation_mode == "full" and self.context_reviewer.enabled
+            else 0
+        )
+        remaining_provider_calls = settings.llm_max_calls_per_analysis - context_call_reserve
         for clause in clauses:
             # Retrieval happens before provider assessment and receives masked text only.
             evidence = self._retrieve_evidence(clause.text)
@@ -152,6 +161,62 @@ class DocumentAnalysisPipeline:
                     )
             warnings.update(result.get("warnings", []))
             usage_calls.extend(result.get("usage", {}).get("calls", []))
+        if evaluation_mode == "full" and self.context_reviewer.enabled:
+            excluded = {
+                (item["clause"]["section_id"], item["rule_signal"]["category"])
+                for item in findings
+            }
+            excluded.update(
+                (item["clause"]["section_id"], item["category"])
+                for item in candidate_findings
+            )
+            context_candidates, context_usage, context_warnings = self.context_reviewer.review(
+                clauses, excluded
+            )
+            clause_by_id = {clause.section_id: clause for clause in clauses}
+            for candidate in context_candidates:
+                clause = clause_by_id[candidate.pop("section_id")]
+                evidence_text = candidate.pop("evidence_quote")
+                relative_start = clause.text.find(evidence_text)
+                absolute_start = clause.char_start + relative_start
+                subclause = clause.subclause_for_offset(relative_start)
+                candidate_findings.append(
+                    {
+                        **candidate,
+                        "source": {
+                            "masked_text": evidence_text,
+                            "match_span": [0, len(evidence_text)],
+                            "page_number": self._page_for_offset(absolute_start, page_ranges),
+                            **(
+                                {
+                                    "_preview_targets": self._preview_targets(
+                                        evidence_text,
+                                        absolute_start,
+                                        absolute_start,
+                                        absolute_start + len(evidence_text),
+                                        page_ranges,
+                                    )
+                                }
+                                if source_extension == ".pdf"
+                                else {}
+                            ),
+                            "preview_status": "text_only",
+                            "preview_ids": [],
+                        },
+                        "clause": {
+                            "number": clause.number,
+                            "label": clause.label,
+                            "section_type": clause.section_type,
+                            "section_id": clause.section_id,
+                            "analyzable": clause.analyzable,
+                            "char_start": clause.char_start,
+                            "char_end": clause.char_end,
+                            "subclause_label": subclause.label if subclause else None,
+                        },
+                    }
+                )
+            usage_calls.extend(context_usage)
+            warnings.update(context_warnings)
         dispositions = {result.get("disposition") for result in results}
         if evaluation_mode == "full" and self.candidates.metadata["backend"] != "multilingual-e5":
             warnings.add("SEMANTIC_MODEL_FALLBACK")
@@ -185,6 +250,11 @@ class DocumentAnalysisPipeline:
             "versions": {
                 "ruleset": self.prototype.rules.version,
                 "semantic": self.candidates.metadata if evaluation_mode == "full" else None,
+                "openai_context": (
+                    self.context_reviewer.version_metadata
+                    if evaluation_mode == "full"
+                    else None
+                ),
             },
         })
 

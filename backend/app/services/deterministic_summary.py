@@ -85,14 +85,19 @@ def candidate_summary(candidate: dict) -> str:
     label = str(candidate.get("name") or candidate.get("category") or "계약 조건")
     excerpt = _matched_excerpt(candidate)
     lead = f"‘{excerpt}’ 문구가 " if excerpt else "해당 문구가 "
-    return _bounded(f"{lead}‘{label}’ 유형과 의미적으로 유사해 추가 확인이 필요합니다.")
+    relation = (
+        "문맥상 해당할 가능성이 있어"
+        if candidate.get("review_method") == "openai_context"
+        else "의미적으로 유사해"
+    )
+    return _bounded(f"{lead}‘{label}’ 유형에 {relation} 추가 확인이 필요합니다.")
 
 
 def document_summary(findings: list[dict], candidates: list[dict]) -> dict:
     """Create one stable headline from the highest-priority distinct rule categories."""
     if not findings and not candidates:
         return {
-            "headline": "현재 19개 규칙과 로컬 의미 검토에서 위험 신호가 확인되지 않았습니다. 계약의 안전성이나 적법성을 보장하지는 않습니다.",
+            "headline": "현재 19개 규칙과 추가 의미 검토에서 위험 신호가 확인되지 않았습니다. 계약의 안전성이나 적법성을 보장하지는 않습니다.",
             "top_categories": [],
         }
 

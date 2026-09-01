@@ -129,7 +129,7 @@ def build_pdf_report(analysis_id: str, result: dict | None) -> bytes:
     if not findings:
         story.extend([
             Paragraph("실험 규칙 신호 없음", heading),
-            Paragraph("현재 19개 규칙과 로컬 의미 검토에서 위험 신호가 탐지되지 않았습니다. 이는 계약의 안전성이나 적법성을 보장하지 않습니다.", warning),
+            Paragraph("현재 19개 규칙과 추가 의미 검토에서 위험 신호가 탐지되지 않았습니다. 이는 계약의 안전성이나 적법성을 보장하지 않습니다.", warning),
         ])
 
     for index, finding in enumerate(findings, start=1):
@@ -188,7 +188,7 @@ def build_pdf_report(analysis_id: str, result: dict | None) -> bytes:
 
     if candidate_findings:
         story.append(Paragraph("추가 의미 검토 후보", heading))
-        story.append(_paragraph("아래 항목은 결정론 규칙 신호가 아니라 고정된 로컬 의미 모델의 검토 후보입니다. 법률 판단이나 확정 신호로 사용하지 않습니다.", warning))
+        story.append(_paragraph("아래 항목은 결정론 규칙 신호가 아닌 로컬 의미 모델 또는 선택적 OpenAI 문맥 검토의 후보입니다. 법률 판단이나 확정 신호로 사용하지 않습니다.", warning))
         for candidate in candidate_findings:
             clause = candidate.get("clause", {})
             label = clause.get("label") or f"제{clause.get('number', '?')}조"
@@ -197,15 +197,21 @@ def build_pdf_report(analysis_id: str, result: dict | None) -> bytes:
             page_number = candidate.get("source", {}).get("page_number")
             if page_number:
                 label = f"{label} · PDF {page_number}페이지"
+            method = candidate.get("review_method", "local_e5")
+            detail = (
+                f"OpenAI 문맥 검토 · {candidate.get('model_id', 'OpenAI model')} · "
+                f"prompt {candidate.get('model_revision', 'api-managed')}"
+                if method == "openai_context"
+                else (
+                    f"유사도 {float(candidate.get('similarity_score', 0)):.3f} · "
+                    f"{candidate.get('model_id', 'local model')} · "
+                    f"리비전 {candidate.get('model_revision', 'unknown')}"
+                )
+            )
             story.extend([
                 Paragraph(f"{escape(label)} · {escape(str(candidate.get('name', '검토 후보')))}", subheading),
                 _paragraph(candidate.get("summary_sentence"), body),
-                _paragraph(
-                    f"유사도 {float(candidate.get('similarity_score', 0)):.3f} · "
-                    f"{candidate.get('model_id', 'local model')} · "
-                    f"리비전 {candidate.get('model_revision', 'unknown')}",
-                    body,
-                ),
+                _paragraph(detail, body),
             ])
             preview = _preview_image(analysis_id, candidate)
             story.append(
