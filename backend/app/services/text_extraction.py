@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+from dataclasses import dataclass
 from io import BytesIO
 from typing import Any
 
@@ -9,6 +11,38 @@ from docx.text.paragraph import Paragraph
 from pypdf import PdfReader
 
 from app.config import get_settings
+
+
+@dataclass(frozen=True)
+class ExtractedDocument:
+    """Page-aware extraction result; ``text`` remains the compatibility surface."""
+    pages: tuple[str, ...]
+    text: str
+
+
+def _normalized_margin_line(line: str) -> str:
+    return re.sub(r"\d+", "#", re.sub(r"\s+", " ", line.strip())).casefold()
+
+
+def _remove_repeated_margins(pages: list[str]) -> list[str]:
+    """Remove only lines repeated in the first/last three lines of multiple pages."""
+    occurrences: dict[str, set[int]] = {}
+    page_lines = [page.splitlines() for page in pages]
+    for page_index, lines in enumerate(page_lines):
+        margin_indexes = set(range(min(5, len(lines))))
+        margin_indexes.update(range(max(0, len(lines) - 5), len(lines)))
+        for index in margin_indexes:
+            normalized = _normalized_margin_line(lines[index])
+            if normalized:
+                occurrences.setdefault(normalized, set()).add(page_index)
+    repeated = {line for line, indexes in occurrences.items() if len(indexes) >= 2}
+    cleaned = []
+    for lines in page_lines:
+        margin_indexes = set(range(min(5, len(lines))))
+        margin_indexes.update(range(max(0, len(lines) - 5), len(lines)))
+        kept = [line for index, line in enumerate(lines) if index not in margin_indexes or _normalized_margin_line(line) not in repeated]
+        cleaned.append("\n".join(kept).strip())
+    return cleaned
 
 
 def _is_usable_ocr_text(text: str, minimum_characters: int, minimum_alnum_ratio: float) -> bool:
@@ -78,7 +112,7 @@ def _ocr_pdf_pages(data: bytes, page_indexes: list[int], settings: Any) -> dict[
     return extracted
 
 
-def _extract_pdf_text(data: bytes) -> str:
+def _extract_pdf_document(data: bytes) -> ExtractedDocument:
     """Combine native page text with local OCR only for pages that need it."""
     settings = get_settings()
     reader = PdfReader(BytesIO(data))
@@ -104,7 +138,13 @@ def _extract_pdf_text(data: bytes) -> str:
             raise ValueError("OCR_REQUIRED: 스캔 PDF에는 로컬 OCR이 필요합니다.")
         for index, text in _ocr_pdf_pages(data, ocr_indexes, settings).items():
             page_texts[index] = text
-    return "\n".join(text for text in page_texts if text)
+    page_texts = _remove_repeated_margins(page_texts)
+    text = "\n".join(text for text in page_texts if text)
+    return ExtractedDocument(tuple(page_texts), text)
+
+
+def _extract_pdf_text(data: bytes) -> str:
+    return _extract_pdf_document(data).text
 
 
 def extract_text(data: bytes, extension: str, max_characters: int = 200_000) -> str:

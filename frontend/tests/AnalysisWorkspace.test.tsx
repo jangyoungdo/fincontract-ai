@@ -83,6 +83,7 @@ describe("AnalysisWorkspace", () => {
     expect(screen.getByText("법률 판단이 아닌 검토 보조")).toBeInTheDocument();
     expect(screen.getByLabelText("계약서 파일")).toHaveAttribute("accept", ".txt,.pdf,.docx");
     expect(screen.getByRole("button", { name: "분석 시작" })).toBeDisabled();
+    expect(screen.queryByText("실험군")).not.toBeInTheDocument();
   });
 
   it("does not invent a bank comparison when no verified dataset exists", () => {
@@ -113,7 +114,7 @@ describe("AnalysisWorkspace", () => {
       result: { findings: [], warnings: [], clause_count: 1 },
     });
     await upload(fetchMock);
-    expect(screen.getByText(/현재 14개 실험 규칙에서 위험 신호가 탐지되지 않았습니다/)).toBeInTheDocument();
+    expect(screen.getByText(/현재 19개 규칙과 로컬 의미 검토에서 위험 신호가 탐지되지 않았습니다/)).toBeInTheDocument();
     expect(screen.getByText(/안전성이나 적법성을 보장하지 않습니다/)).toBeInTheDocument();
   });
 

@@ -1,5 +1,5 @@
 {
-  "manifest_version": "public-law-v0.1.0",
+  "manifest_version": "public-law-v0.1.1",
   "generated_at": "2026-08-31T00:00:00+09:00",
   "cutoff_date": "2026-08-31",
   "status": "verified",
@@ -23,7 +23,7 @@
       "accepted_count": 7,
       "rejected_count": 0,
       "deduplication_key": "document_id:chunk_id",
-      "content_hash": "sha256:1a81e285fb25f4e129599ea341447b6a1cfdbe371a76821ca14eca4edc51ecab",
+      "content_hash": "sha256:41ab862358da61a3ab9f4e78dbbe3b0e7d8d614e8a0189c79388603e48a70ade",
       "license_status": "approved",
       "license_basis": "저작권법 제7조 제1호에 따라 법령은 보호받지 못하는 저작물에 해당",
       "license_basis_url": "https://www.law.go.kr/lsLinkCommonInfo.do?lsJoLnkSeq=1029423769",

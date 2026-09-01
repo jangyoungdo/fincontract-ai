@@ -19,8 +19,8 @@ class DocumentResponse(BaseModel):
 
 
 class AnalysisRequest(BaseModel):
-    """Select the reproducible experiment arm for a new analysis."""
-    experiment_arm: Literal["A", "D"] = "D"
+    """Create the single production analysis; experiment_arm is legacy-only."""
+    experiment_arm: Literal["A", "D"] | None = None
 
 
 class AnalysisResponse(BaseModel):

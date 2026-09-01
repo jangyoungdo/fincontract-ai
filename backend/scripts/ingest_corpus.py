@@ -49,8 +49,9 @@ def main() -> int:
         metadata.setdefault("authority_weight", 0.5)
         # Stable IDs plus source hashes make repeated ingestion deterministic.
         if existing["ids"]:
-            previous_hash = existing["metadatas"][0]["source_hash"]
-            if previous_hash == record["source_hash"]:
+            previous = existing["metadatas"][0]
+            metadata_unchanged = all(previous.get(key) == value for key, value in metadata.items())
+            if previous["source_hash"] == record["source_hash"] and metadata_unchanged:
                 counts["skip"] += 1
                 continue
             counts["update"] += 1

@@ -43,7 +43,7 @@ class PrototypeHandler(BaseHTTPRequestHandler):
             payload = self._read_json()
             if path == "/api/v1/analyses":
                 result = PIPELINE.analyze(
-                    payload.get("text", ""), payload.get("experiment_arm", "D")
+                    payload.get("text", ""), "D"
                 )
                 ANALYSES[result["analysis_id"]] = result
                 self._json(201, result)

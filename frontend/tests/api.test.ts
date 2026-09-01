@@ -10,11 +10,12 @@ describe("same-origin API client", () => {
       .mockResolvedValueOnce({ ok: true, json: async () => ({ id: "analysis-1", document_id: "document-1", status: "queued", disposition: "pending", experiment_arm: "A" }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ id: "analysis-1", document_id: "document-1", status: "completed", disposition: "no_signal", experiment_arm: "A" }) });
     vi.stubGlobal("fetch", fetchMock);
-    const created = await uploadAndAnalyze(new File(["x"], "terms.txt"), "A");
+    const created = await uploadAndAnalyze(new File(["x"], "terms.txt"));
     await waitForAnalysis(created, { maxAttempts: 2, pollIntervalMs: 0 });
 
     expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/documents");
     expect(fetchMock.mock.calls[1][0]).toBe("/api/v1/documents/document-1/analyses");
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({});
     expect(fetchMock.mock.calls[2][0]).toBe("/api/v1/analyses/analysis-1");
     expect(reportPdfUrl("analysis/id")).toBe("/api/v1/analyses/analysis%2Fid/report.pdf");
   });
@@ -42,7 +43,7 @@ describe("same-origin API client", () => {
       status: 400,
       json: async () => ({ detail: "PDF_ENCRYPTED: secret parser detail" }),
     }));
-    await expect(uploadAndAnalyze(new File(["x"], "locked.pdf"), "D")).rejects.toMatchObject({
+    await expect(uploadAndAnalyze(new File(["x"], "locked.pdf"))).rejects.toMatchObject({
       name: "ClientApiError",
       stage: "upload",
       code: "PDF_ENCRYPTED",

@@ -33,6 +33,14 @@ class Settings(BaseSettings):
     anthropic_timeout_seconds: float = 20.0
     anthropic_sdk_max_retries: int = 0
     llm_max_calls_per_analysis: int = 8
+    semantic_model_enabled: bool = True
+    semantic_model_required: bool = False
+    semantic_model_path: Path = Path("/opt/models/multilingual-e5-small")
+    semantic_model_id: str = "intfloat/multilingual-e5-small"
+    semantic_model_revision: str = "8d923955b027282ba975c0a4c825486c9ca4c490"
+    # Calibrated on the public synthetic dev set; 0.72 remains the calibration fallback.
+    semantic_candidate_threshold: float = 0.90
+    semantic_candidate_margin: float = 0.04
     upload_dir: Path = Path("./storage/uploads")
     report_dir: Path = Path("./storage/reports")
     max_upload_bytes: int = 10_485_760

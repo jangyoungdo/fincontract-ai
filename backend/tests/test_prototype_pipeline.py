@@ -55,6 +55,11 @@ class PrototypePipelineTest(unittest.TestCase):
         self.assertEqual("passed", result["findings"][0]["verification"]["status"])
         self.assertEqual("verified:1", result["findings"][0]["assessment"]["cited_evidence_ids"][0])
 
+    def test_legacy_source_verified_status_is_normalized_during_reindex_transition(self) -> None:
+        assessment = {"cited_evidence_ids": ["legacy:1"], "summary": "검토 보조"}
+        evidence = [{"evidence_id": "legacy:1", "status": "source_verified"}]
+        self.assertEqual("passed", self.pipeline._verify(assessment, evidence, True)["status"])
+
     def test_arm_a_has_no_llm_usage(self) -> None:
         result = self.pipeline.analyze(
             "본 계약에 관한 소송은 은행 본점 소재지 법원을 전속적 관할법원으로 한다.", "A"
@@ -62,15 +67,18 @@ class PrototypePipelineTest(unittest.TestCase):
         self.assertEqual([], result["usage"]["calls"])
         self.assertIsNone(result["findings"][0]["assessment"])
 
-    def test_arm_d_fails_closed_before_exceeding_provider_call_budget(self) -> None:
+    def test_provider_budget_preserves_rule_findings_and_marks_enrichment_skipped(self) -> None:
         result = self.pipeline.analyze(
             "은행은 필요하다고 인정하는 경우 서비스 내용을 일방적으로 변경할 수 있다.",
             "D",
             max_provider_calls=0,
         )
-        self.assertEqual("failed", result["status"])
+        self.assertEqual("completed", result["status"])
         self.assertEqual("needs_review", result["disposition"])
-        self.assertEqual("LLM_CALL_BUDGET_EXCEEDED", result["failure"]["code"])
+        self.assertEqual(1, len(result["findings"]))
+        self.assertIsNone(result["findings"][0]["assessment"])
+        self.assertEqual("not_run", result["findings"][0]["verification"]["status"])
+        self.assertIn("LLM_BUDGET_SKIPPED", result["warnings"])
 
     def test_pii_is_not_present_in_result(self) -> None:
         email = "customer@example.com"

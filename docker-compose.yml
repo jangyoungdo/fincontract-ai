@@ -84,6 +84,7 @@ services:
       USE_REDIS: "true"
       REDIS_URL: redis://redis:6379/0
       LLM_PROVIDER: fake
+      SEMANTIC_MODEL_REQUIRED: "true"
       OCR_ENABLED: "true"
       OCR_LANGUAGES: kor+eng
       UPLOAD_DIR: /data/uploads
@@ -120,6 +121,7 @@ services:
       USE_REDIS: "true"
       REDIS_URL: redis://redis:6379/0
       LLM_PROVIDER: fake
+      SEMANTIC_MODEL_REQUIRED: "true"
       OCR_ENABLED: "true"
       OCR_LANGUAGES: kor+eng
       UPLOAD_DIR: /data/uploads
