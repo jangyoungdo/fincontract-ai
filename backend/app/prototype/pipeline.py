@@ -68,18 +68,9 @@ class PrototypePipeline:
 
         masked_text = masking.masked_text
         rule_matches = self.rules.screen(masked_text)
-        if (
-            experiment_arm == "D"
-            and max_provider_calls is not None
-            and len(rule_matches) > max_provider_calls
-        ):
-            return self._safe_failure(
-                analysis_id,
-                created_at,
-                "LLM_CALL_BUDGET_EXCEEDED",
-            )
         usage: List[Dict[str, Any]] = []
         findings = []
+        runtime_warnings: set[str] = set()
 
         for index, match in enumerate(rule_matches, start=1):
             signal = match.to_dict()
@@ -99,7 +90,8 @@ class PrototypePipeline:
             assessment: Optional[Dict[str, Any]] = None
             verification = {"status": "not_run", "issues": [], "attempts": 0}
 
-            if experiment_arm == "D":
+            call_allowed = max_provider_calls is None or len(usage) < max_provider_calls
+            if experiment_arm == "D" and call_allowed:
                 # The provider sees the rule signal and retrieved evidence only;
                 # raw document bytes and unmasked text never cross this boundary.
                 route = self.router.route(
@@ -109,25 +101,18 @@ class PrototypePipeline:
                         estimated_input_tokens=max(1, len(masked_text) // 3),
                     )
                 )
-                assessment = self.provider.assess(
-                    signal,
-                    evidence,
-                    route.model,
-                    max_tokens=route.max_output_tokens,
-                )
-                usage.append(
-                    self._usage(
-                        route,
-                        index,
-                        max(1, len(masked_text) // 3),
-                        self.provider.last_call_metadata(),
+                try:
+                    assessment = self.provider.assess(
+                        signal, evidence, route.model, max_tokens=route.max_output_tokens
                     )
-                )
-                verification = self._verify(
-                    assessment,
-                    evidence,
-                    require_verified_evidence=True,
-                )
+                    usage.append(self._usage(route, index, max(1, len(masked_text) // 3), self.provider.last_call_metadata()))
+                    verification = self._verify(assessment, evidence, require_verified_evidence=True)
+                except Exception:
+                    runtime_warnings.add("LLM_ENRICHMENT_FAILED")
+                    verification = {"status": "not_run", "issues": [{"code": "LLM_ENRICHMENT_FAILED", "message": "설명 보강을 실행하지 못했습니다."}], "attempts": 0}
+            elif experiment_arm == "D":
+                runtime_warnings.add("LLM_BUDGET_SKIPPED")
+                verification = {"status": "not_run", "issues": [{"code": "LLM_BUDGET_SKIPPED", "message": "호출 예산으로 설명 보강을 생략했습니다."}], "attempts": 0}
 
             findings.append(
                 {
@@ -162,7 +147,7 @@ class PrototypePipeline:
 
         return {
             "analysis_id": analysis_id,
-            "api_version": "prototype-1",
+            "api_version": "analysis-2",
             "status": "completed",
             "disposition": disposition,
             "experiment": {
@@ -193,7 +178,7 @@ class PrototypePipeline:
                 "법적 근거는 검증 전 후보이며 원문·시행일 확인이 필요합니다.",
                 "mock 에이전트 결과는 실제 LLM 품질 평가에 사용할 수 없습니다.",
                 "이 결과는 법률 판단이 아닌 검토 보조 자료입니다.",
-            ],
+            ] + sorted(runtime_warnings),
             "created_at": created_at,
             "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
         }
@@ -211,7 +196,7 @@ class PrototypePipeline:
             issues.append({"code": "INVALID_EVIDENCE_ID", "message": "허용되지 않은 근거 ID"})
         if require_verified_evidence:
             cited = [item for item in evidence if item["evidence_id"] in cited_ids]
-            if any(item.get("status") != "verified" for item in cited):
+            if any(PrototypePipeline._evidence_status(item) != "verified" for item in cited):
                 issues.append(
                     {"code": "UNVERIFIED_EVIDENCE", "message": "검증되지 않은 검색 근거 인용"}
                 )
@@ -219,6 +204,11 @@ class PrototypePipeline:
         if any(term in combined for term in FORBIDDEN_CONCLUSIONS):
             issues.append({"code": "LEGAL_CONCLUSION", "message": "확정적 법률 표현"})
         return {"status": "failed" if issues else "passed", "issues": issues, "attempts": 1}
+
+    @staticmethod
+    def _evidence_status(item: Dict[str, Any]) -> str:
+        status = str(item.get("status") or item.get("review_status") or "unverified")
+        return "verified" if status in {"verified", "source_verified"} else status
 
     @staticmethod
     def _corpus_version(evidence: List[Dict[str, Any]]) -> str:

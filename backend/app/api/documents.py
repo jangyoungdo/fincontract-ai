@@ -121,7 +121,7 @@ def create_analysis(document_id: str, request: AnalysisRequest, response: Respon
             document_id=document_id,
             status="queued" if settings.use_redis else "analyzing",
             disposition="pending",
-            experiment_arm=request.experiment_arm,
+            experiment_arm="full",
         )
         session.add(record)
         add_audit_event(

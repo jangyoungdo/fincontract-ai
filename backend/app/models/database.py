@@ -40,7 +40,7 @@ class AnalysisRecord(Base):
     document_id: Mapped[str] = mapped_column(ForeignKey("documents.id"), index=True)
     status: Mapped[str] = mapped_column(String(30), default="queued")
     disposition: Mapped[str] = mapped_column(String(30), default="pending")
-    experiment_arm: Mapped[str] = mapped_column(String(5), default="D")
+    experiment_arm: Mapped[str] = mapped_column(String(5), default="full")
     result_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     error_code: Mapped[str | None] = mapped_column(String(100), nullable=True)
     created_at: Mapped[datetime] = mapped_column(

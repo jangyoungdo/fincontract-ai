@@ -62,6 +62,8 @@ def test_txt_upload_analysis_report_and_delete() -> None:
         assert analyzed.status_code == 201, analyzed.text
         body = analyzed.json()
         assert body["status"] == "completed"
+        assert body["experiment_arm"] == "full"
+        assert body["result"]["experiment"]["mode"] == "full"
         assert len(body["result"]["findings"]) == 1
 
         report = client.get(f"/api/v1/analyses/{body['id']}/report")

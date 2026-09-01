@@ -63,19 +63,23 @@ export type Finding = {
     issues?: Array<{ code: string; message: string }>;
     attempts?: number;
   };
-  clause?: { number: number; label?: string; subclause_label?: string; char_start: number; char_end: number };
+  clause?: { number: number | null; label?: string; subclause_label?: string; section_type?: string; section_id?: string; char_start: number; char_end: number };
 };
 
 export type CandidateFinding = {
   candidate_id: string;
   category: string;
   name: string;
-  status: "deterministic_rule_unmapped_candidate";
+  status: "semantic_review_candidate";
   confidence: string;
-  matched_terms: string[];
+  similarity_score: number;
+  similarity_margin?: number;
+  model_id: string;
+  model_revision: string;
+  matched_prototype_ids: string[];
   review_questions: string[];
   source: { masked_text: string };
-  clause: { number: number; label?: string; char_start: number; char_end: number };
+  clause: { number: number | null; label?: string; subclause_label?: string | null; section_type?: string; section_id?: string; char_start: number; char_end: number };
 };
 
 export type Analysis = {
@@ -166,8 +170,8 @@ export function reportPdfUrl(analysisId: string): string {
   return `${API_BASE}/analyses/${encodeURIComponent(analysisId)}/report.pdf`;
 }
 
-/** Upload one validated file, then create an analysis for the selected experiment arm. */
-export async function uploadAndAnalyze(file: File, arm: "A" | "D"): Promise<Analysis> {
+/** Upload one validated file, then create the single production analysis. */
+export async function uploadAndAnalyze(file: File): Promise<Analysis> {
   const form = new FormData();
   form.append("file", file);
   const uploaded = await safeFetch(`${API_BASE}/documents`, { method: "POST", body: form }, "upload");
@@ -177,7 +181,7 @@ export async function uploadAndAnalyze(file: File, arm: "A" | "D"): Promise<Anal
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ experiment_arm: arm }),
+      body: JSON.stringify({}),
     },
     "analysis_create",
   );

@@ -11,7 +11,7 @@
 ## 현재 상태
 
 - Next.js 업로드·분석 대시보드와 FastAPI 문서/분석/PDF 리포트 API 구현
-- PDF/DOCX/TXT 추출, PII 마스킹, 14개 규칙, RAG 선행 검색과 근거 검증 구현
+- PDF/DOCX/TXT 추출, PII 마스킹, 19개 규칙, 오프라인 다국어 E5 의미 후보, RAG 근거 검증 구현
 - PostgreSQL 메타데이터, Redis worker 재시도·격리, ChromaDB 5개 컬렉션 구현
 - Fernet 원문 암호화, 문서 TTL, 감사 로그·만료와 관리자 보호 조회 구현
 - fake provider 전체 흐름과 Claude structured output 라우팅을 분리하고 외부 전송은 opt-in으로 제한
@@ -39,18 +39,9 @@
 4. **Human-in-the-loop 가설**: 사람의 승인·수정 데이터를 수집하면 검토 시간을 줄이면서도 최종 판단 책임과 설명 가능성을 유지할 수 있다.
 5. **최소 복잡도 가설**: 멀티 에이전트의 품질 향상이 비용·지연·운영 복잡도를 상쇄할 때만 해당 구조를 채택해야 한다.
 
-### 비교 실험군
+### 운영 분석과 내부 기준선
 
-모든 실험군은 동일한 평가셋과 출력 스키마를 사용합니다.
-
-| 실험군 | 구성 | 확인할 내용 |
-|---|---|---|
-| A | 14개 규칙 엔진 | 최소 비용 기준선과 규칙별 탐지 성능 |
-| B | 단일 LLM, RAG 없음 | 일반 모델의 기본 추론 성능과 환각 위험 |
-| C | RAG + 단일 분석 에이전트 | 도메인 근거가 품질에 미치는 영향 |
-| D | 계획 + 검색 + 분석 + 검증 | 역할 분리의 추가 효과와 운영 비용 |
-
-B는 연구용 비교군이며, 마스킹되지 않은 원문을 외부 모델로 전송하지 않습니다. 검색 코퍼스와 평가셋은 분리해 데이터 누수를 방지합니다.
+운영 API·화면·PDF는 A/D 선택 없이 단일 `full_pipeline`만 제공합니다. 이 파이프라인은 19개 결정론 규칙의 `findings[]`와 오프라인 E5의 `candidate_findings[]`를 분리해 반환합니다. 내부 평가 CLI의 `rules-only` 기준선은 회귀 측정에만 사용하며 운영 기능이 아닙니다. full은 rules-only의 결정론 결과를 삭제하거나 변경할 수 없습니다.
 
 ### 성공 판단
 
@@ -69,7 +60,7 @@ B는 연구용 비교군이며, 마스킹되지 않은 원문을 외부 모델�
 UI/UX                 업로드 · 원문/근거 대조 · 사람의 승인/수정
 Management            워크플로 상태 · 재시도 · 감사로그 · 버전 관리
 AI Service            계획 · 근거 검색 · 계약 분석 · 결과 검증
-Deterministic Tools   파일 검증 · PII 마스킹 · 조항 분리 · 14개 규칙 · 인용 검사
+Deterministic Tools   파일 검증 · PII 마스킹 · 조항 분리 · 19개 규칙 · 인용 검사
 Data                   PostgreSQL · ChromaDB 5개 컬렉션 · 평가셋 · 출처 manifest
 Infrastructure         Docker Compose · CI · 비밀정보 관리 · 관측성
 ```
@@ -81,7 +72,7 @@ Infrastructure         Docker Compose · CI · 비밀정보 관리 · 관측성
 기능을 모두 만든 뒤 한 번에 평가하지 않고, 다음 순서로 작동하는 기준선을 누적합니다.
 
 1. 한 종류의 금융 계약과 2~3개 탐지 규칙으로 좁힌 골드셋을 만든다.
-2. 규칙 엔진 기준선 A를 실행하고 실패 사례를 고정한다.
+2. 내부 `rules-only` 기준선을 실행하고 실패 사례를 고정한다.
 3. 동일 입력·출력 계약으로 B와 C를 추가해 RAG 효과를 비교한다.
 4. C에서 반복되는 오류가 확인될 때만 계획 또는 검증 에이전트를 추가한다.
 5. 두 명 이상의 검토자가 블라인드 평가하고 불일치 사유를 기록한다.
@@ -96,7 +87,8 @@ Infrastructure         Docker Compose · CI · 비밀정보 관리 · 관측성
 파일 검증·로컬 추출
   → PII 마스킹·검증
   → 조항 분리
-  → 14개 규칙 엔진
+  → 19개 규칙 엔진
+  → 오프라인 다국어 E5 의미 검토 후보
   → ChromaDB 근거 검색
   → Claude 구조화 분석
   → 근거·인용 검증
@@ -112,6 +104,7 @@ Infrastructure         Docker Compose · CI · 비밀정보 관리 · 관측성
 - Operational data: PostgreSQL
 - Retrieval: ChromaDB
 - LLM: Anthropic Claude Messages API + Structured Outputs
+- Local semantic review: `intfloat/multilingual-e5-small` revision `8d923955b027282ba975c0a4c825486c9ca4c490` (MIT), weights SHA-256 `1a55775f53449dac10a2bcbc312469fac40b96d53198c407081a831f81c98477`
 - Optional async processing: Redis + Worker
 - Local runtime: Docker Compose
 

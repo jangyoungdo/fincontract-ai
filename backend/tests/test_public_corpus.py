@@ -23,4 +23,4 @@ def test_public_corpus_manifest_and_hashes_are_reproducible() -> None:
         text_hash = hashlib.sha256(record["text"].encode()).hexdigest()
         assert record["source_hash"] == f"sha256:{text_hash}"
         assert record["authority"] == "국가법령정보센터"
-        assert record["review_status"] == "source_verified"
+        assert record["review_status"] == "verified"

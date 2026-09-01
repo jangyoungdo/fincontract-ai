@@ -1,7 +1,8 @@
 from app.prototype.pii import mask_pii
+from app.services.analysis_pipeline import DocumentAnalysisPipeline
 from app.services.candidate_finder import CandidateFinder
 from app.services.clause_segmenter import segment_clauses
-from app.services.analysis_pipeline import DocumentAnalysisPipeline
+from app.services.text_extraction import _remove_repeated_margins
 
 
 def test_contract_subject_text_is_not_masked_as_a_name() -> None:
@@ -32,15 +33,55 @@ def test_candidate_finder_requires_two_taxonomy_terms() -> None:
 
 
 def test_candidate_finder_returns_a_separate_taxonomy_candidate() -> None:
-    candidates = CandidateFinder().suggest("고객의 우대금리를 소급 취소할 수 있습니다.")
+    class TargetEncoder:
+        model_id = "test-e5"
+        model_revision = "test-revision"
+        backend = "injected"
+        def __call__(self, texts: list[str]):
+            return [[1.0, 0.0] if "소급" in text or "우대 혜택" in text else [0.0, 1.0] for text in texts]
+    finder = CandidateFinder(encoder=TargetEncoder())
+    finder.threshold = 0.7
+    candidates = finder.suggest("고객의 우대금리를 소급 취소할 수 있습니다.")
     assert candidates[0]["category"] == "retroactive_disadvantage"
-    assert candidates[0]["status"] == "deterministic_rule_unmapped_candidate"
+    assert candidates[0]["status"] == "semantic_review_candidate"
+    assert candidates[0]["model_id"] == "test-e5"
 
 
 def test_pipeline_returns_candidates_separately_and_requires_review(monkeypatch) -> None:
     pipeline = DocumentAnalysisPipeline()
     monkeypatch.setattr(pipeline, "_retrieve_evidence", lambda _: [])
+    monkeypatch.setattr(pipeline.candidates, "suggest", lambda text, excluded: [{
+        "candidate_id": "candidate:R12", "category": "retroactive_disadvantage",
+        "name": "소급 불이익", "status": "semantic_review_candidate", "confidence": "medium",
+        "similarity_score": 0.8, "model_id": "test-e5", "model_revision": "test",
+        "matched_prototype_ids": ["R12:p1"], "review_questions": ["소급 적용되는지"],
+    }])
     result = pipeline.run("제1조 고객의 우대금리 혜택을 과거분까지 없앤다.", "A")
     assert result["findings"] == []
     assert result["candidate_findings"][0]["category"] == "retroactive_disadvantage"
     assert result["disposition"] == "needs_review"
+
+
+def test_preamble_is_not_analyzed_and_appendices_are_independent_sections() -> None:
+    source = "위험유형 시험: 은행이 일방 변경\n제1조 정상 조항\n별지 1 개인정보를 동의 없이 제3자에게 제공한다."
+    sections = segment_clauses(source)
+    assert sections[0].section_type == "preamble" and sections[0].analyzable is False
+    assert sections[1].section_id == "article:1"
+    assert sections[2].section_id == "appendix:1"
+
+
+def test_repeated_page_margins_are_removed_but_unique_content_is_retained() -> None:
+    pages = ["공통 계약서\n제1조 첫 내용\n1 / 2", "공통 계약서\n제2조 둘째 내용\n2 / 2"]
+    assert _remove_repeated_margins(pages) == ["제1조 첫 내용", "제2조 둘째 내용"]
+
+
+def test_full_pipeline_preserves_rules_only_findings(monkeypatch) -> None:
+    pipeline = DocumentAnalysisPipeline()
+    monkeypatch.setattr(pipeline, "_retrieve_evidence", lambda _: [])
+    monkeypatch.setattr(pipeline.candidates, "suggest", lambda text, excluded: [])
+    text = "제1조 은행은 필요하다고 인정하는 경우 계약 내용을 변경할 수 있다."
+    baseline = pipeline.run(text, evaluation_mode="rules_only")
+    full = pipeline.run(text, evaluation_mode="full")
+    project = lambda result: [(item["finding_id"], item["rule_signal"]) for item in result["findings"]]
+    assert project(full) == project(baseline)
+    assert full["experiment"]["mode"] == "full"

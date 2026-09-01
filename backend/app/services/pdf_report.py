@@ -83,7 +83,7 @@ def build_pdf_report(analysis_id: str, result: dict | None) -> bytes:
                 ["상태", _paragraph(safe_result.get("disposition", "unknown"), body)],
                 ["조항 수", str(safe_result.get("clause_count", 0))],
                 ["검토 신호", str(len(findings))],
-                ["추가 검토 후보", str(len(candidate_findings))],
+                ["추가 의미 검토 후보", str(len(candidate_findings))],
             ],
             colWidths=[35 * mm, 120 * mm],
             style=TableStyle([
@@ -99,7 +99,7 @@ def build_pdf_report(analysis_id: str, result: dict | None) -> bytes:
     if not findings:
         story.extend([
             Paragraph("실험 규칙 신호 없음", heading),
-            Paragraph("현재 14개 실험 규칙에서 위험 신호가 탐지되지 않았습니다. 이는 계약의 안전성이나 적법성을 보장하지 않습니다.", warning),
+            Paragraph("현재 19개 규칙과 로컬 의미 검토에서 위험 신호가 탐지되지 않았습니다. 이는 계약의 안전성이나 적법성을 보장하지 않습니다.", warning),
         ])
 
     for index, finding in enumerate(findings, start=1):
@@ -163,15 +163,22 @@ def build_pdf_report(analysis_id: str, result: dict | None) -> bytes:
             story.append(_paragraph(f"• {issue.get('code', 'VERIFY_ERROR')}: {issue.get('message', '')}", warning))
 
     if candidate_findings:
-        story.append(Paragraph("추가 검토 후보", heading))
-        story.append(_paragraph("아래 항목은 결정론 규칙 신호가 아니라 로컬 분류 사전 기반 후보입니다. 법률 판단이나 확정 신호로 사용하지 않습니다.", warning))
+        story.append(Paragraph("추가 의미 검토 후보", heading))
+        story.append(_paragraph("아래 항목은 결정론 규칙 신호가 아니라 고정된 로컬 의미 모델의 검토 후보입니다. 법률 판단이나 확정 신호로 사용하지 않습니다.", warning))
         for candidate in candidate_findings:
             clause = candidate.get("clause", {})
             label = clause.get("label") or f"제{clause.get('number', '?')}조"
+            if clause.get("subclause_label"):
+                label = f"{label} · {clause['subclause_label']}"
             story.extend([
                 Paragraph(f"{escape(label)} · {escape(str(candidate.get('name', '검토 후보')))}", subheading),
                 _paragraph(candidate.get("source", {}).get("masked_text"), quote),
-                _paragraph(f"겹친 분류 용어: {', '.join(candidate.get('matched_terms', []))}", body),
+                _paragraph(
+                    f"유사도 {float(candidate.get('similarity_score', 0)):.3f} · "
+                    f"{candidate.get('model_id', 'local model')} · "
+                    f"리비전 {candidate.get('model_revision', 'unknown')}",
+                    body,
+                ),
             ])
             for question in candidate.get("review_questions", []):
                 story.append(_paragraph(f"• 확인 질문: {question}", body))
