@@ -4,6 +4,7 @@ from app.config import get_settings
 from app.prototype import PrototypePipeline
 from app.prototype.pii import mask_pii
 
+from .candidate_finder import CandidateFinder
 from .clause_segmenter import segment_clauses
 from .retrieval import HybridRetriever
 
@@ -13,6 +14,7 @@ class DocumentAnalysisPipeline:
     def __init__(self) -> None:
         self.prototype = PrototypePipeline()
         self.retriever = HybridRetriever()
+        self.candidates = CandidateFinder(self.prototype.rules)
 
     def run(self, text: str, experiment_arm: str) -> dict:
         """Analyze each clause and preserve the strictest downstream disposition."""
@@ -51,20 +53,39 @@ class DocumentAnalysisPipeline:
             results.append(result)
             remaining_provider_calls -= len(result.get("usage", {}).get("calls", []))
         findings = []
+        candidate_findings = []
         warnings = set()
         usage_calls = []
         for clause, result in zip(clauses, results):
             for finding in result.get("findings", []):
                 finding["clause"] = {
                     "number": clause.number,
+                    "label": clause.label,
                     "char_start": clause.char_start,
                     "char_end": clause.char_end,
                 }
+                subclause = clause.subclause_for_offset(finding["source"]["match_span"][0])
+                if subclause:
+                    finding["clause"]["subclause_label"] = subclause.label
                 findings.append(finding)
+            if not result.get("findings"):
+                for candidate in self.candidates.suggest(clause.text):
+                    candidate_findings.append(
+                        {
+                            **candidate,
+                            "source": {"masked_text": clause.text},
+                            "clause": {
+                                "number": clause.number,
+                                "label": clause.label,
+                                "char_start": clause.char_start,
+                                "char_end": clause.char_end,
+                            },
+                        }
+                    )
             warnings.update(result.get("warnings", []))
             usage_calls.extend(result.get("usage", {}).get("calls", []))
         dispositions = {result.get("disposition") for result in results}
-        if "needs_review" in dispositions:
+        if "needs_review" in dispositions or candidate_findings:
             disposition = "needs_review"
         elif not findings:
             disposition = "no_signal"
@@ -75,6 +96,7 @@ class DocumentAnalysisPipeline:
             "disposition": disposition,
             "clause_count": len(clauses),
             "findings": findings,
+            "candidate_findings": candidate_findings,
             "warnings": sorted(warnings),
             "document": {
                 "masked_text": document_masking.masked_text,

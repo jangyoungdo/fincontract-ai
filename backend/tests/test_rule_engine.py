@@ -41,9 +41,9 @@ class RuleEngineTest(unittest.TestCase):
         self.assertTrue(DEFAULT_RULESET_PATH.is_file())
         self.assertTrue(DEFAULT_POLICY_PATH.is_file())
 
-    def test_all_eight_rules_have_a_synthetic_positive_case(self) -> None:
+    def test_all_fourteen_rules_have_a_synthetic_positive_case(self) -> None:
         cases = {
-            "R01_EXCESSIVE_LIQUIDATED_DAMAGES": "고객은 손해의 발생 여부와 관계없이 위약금을 지급한다.",
+            "R01_EXCESSIVE_LIQUIDATED_DAMAGES": "고객은 실제 손해와 관계없이 위약금 전액을 지급한다.",
             "R02_UNFAIR_TERMINATION": "은행은 필요하다고 인정하는 경우 계약을 해지할 수 있다.",
             "R03_LIMITATION_OF_LIABILITY": "은행은 어떠한 책임을 지지 않는다.",
             "R04_UNILATERAL_CHANGE": "은행은 필요하다고 인정하는 경우 서비스 내용을 일방적으로 변경할 수 있다.",
@@ -51,8 +51,14 @@ class RuleEngineTest(unittest.TestCase):
             "R06_TRANSFER_OF_RIGHTS": "은행은 고객의 동의 없이 채권을 제3자에게 양도할 수 있다.",
             "R07_AUTOMATIC_RENEWAL": "계약은 만료일에 자동으로 갱신된다.",
             "R08_EXCLUSIVE_JURISDICTION": "소송은 은행 본점 소재지 법원에서만 한다.",
+            "R09_EXCESSIVE_FEES_OR_RATE": "채무자는 중도상환수수료를 부담한다.",
+            "R10_TYING_OR_ANCILLARY_TRANSACTION": "고객은 신용카드를 반드시 가입하여야 한다.",
+            "R11_DEEMED_CONSENT": "고객이 이의를 제기하지 않으면 동의한 것으로 본다.",
+            "R12_RETROACTIVE_DISADVANTAGE": "우대금리를 소급 적용하여 모두 취소한다.",
+            "R13_ADDITIONAL_COLLATERAL_OR_GUARANTEE": "채권자는 추가 담보를 제출하도록 요구한다.",
+            "R14_EVIDENCE_MONOPOLY_AND_OBJECTION_LIMIT": "은행 전산 기록을 최종 증거로 하며 이의를 제기할 수 없다.",
         }
-        self.assertEqual(8, len(self.engine.ruleset["rules"]))
+        self.assertEqual(14, len(self.engine.ruleset["rules"]))
         for rule_id, text in cases.items():
             with self.subTest(rule_id=rule_id):
                 self.assertIn(rule_id, {match.rule_id for match in self.engine.screen(text)})
@@ -65,7 +71,7 @@ class RuleEngineTest(unittest.TestCase):
             "suggested_revision",
             "disclaimer",
         }
-        self.assertEqual(8, len(self.engine.ruleset["rules"]))
+        self.assertEqual(14, len(self.engine.ruleset["rules"]))
         for rule in self.engine.ruleset["rules"]:
             with self.subTest(rule_id=rule["id"]):
                 explanation = rule["explanation"]

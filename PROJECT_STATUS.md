@@ -16,7 +16,7 @@
 - `.github/`: Pull Request 템플릿과 저장소 기본 검사
 - `scripts/setup-dev.sh`, `.githooks/pre-push`: 저장소별 협업 설정과 main 직접 push 방지
 - `experiments/001-rule-baseline/`: 첫 번째 버티컬 AI 비교 실험 명세
-- `backend/app/rules/`: 합성 데이터로 검증하는 8개 위험 신호 규칙 기준선
+- `backend/app/rules/`: 합성 데이터로 검증하는 14개 위험 신호 규칙 기준선과 규칙 미매핑 로컬 검토 후보
 - `backend/app/services/`: 암호화 저장, 문서 처리, RAG 검색, 비동기 작업, 감사·보존, PDF 리포트
 - `backend/app/api/`: 문서·분석·리포트와 보호된 관리자 감사 API
 - `frontend/`: 비개발자용 업로드·분석·근거·PDF 다운로드 화면
@@ -27,7 +27,7 @@
 - 불공정약관 관련 자료 후보 641건의 원본과 집계 단위
 - 분쟁사례 후보 16건의 원본과 포함 기준
 - 심결·판례·분쟁사례·표준약관 자료의 개별 라이선스 및 재배포 가능 여부
-- 8개 규칙의 법률 전문가 검토 여부
+- 14개 규칙의 법률 전문가 검토 여부
 - 실제 Claude API의 배포 환경별 보존 정책
 
 ## 다음 검증 단계

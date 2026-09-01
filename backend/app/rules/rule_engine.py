@@ -64,11 +64,16 @@ class RuleEngine:
         for rule in self._rules:
             if selected is not None and rule["id"] not in selected:
                 continue
-            if self._matches_any(rule["negative_patterns"], normalized):
+            required = rule.get("required_pattern_groups")
+            group_matches = (
+                [self._first_match(group, normalized) for group in required]
+                if required
+                else [self._first_match(rule["positive_patterns"], normalized)]
+            )
+            if any(match is None for match in group_matches):
                 continue
-
-            positive = self._first_match(rule["positive_patterns"], normalized)
-            if positive is None:
+            positive = next(match for match in group_matches if match is not None)
+            if self._has_local_suppression(rule.get("negative_patterns", []), normalized, positive):
                 continue
 
             context_count = sum(term in normalized for term in rule["context_terms"])
@@ -109,3 +114,12 @@ class RuleEngine:
     @classmethod
     def _matches_any(cls, patterns: Iterable[str], text: str) -> bool:
         return cls._first_match(patterns, text) is not None
+
+    @classmethod
+    def _has_local_suppression(
+        cls, patterns: Iterable[str], text: str, anchor: re.Match[str], window: int = 140
+    ) -> bool:
+        """Do not let a safe exception in another sub-item hide a risk signal."""
+        start = max(0, anchor.start() - window)
+        end = min(len(text), anchor.end() + window)
+        return cls._matches_any(patterns, text[start:end])

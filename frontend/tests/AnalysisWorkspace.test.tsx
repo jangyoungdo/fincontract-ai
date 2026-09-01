@@ -113,7 +113,7 @@ describe("AnalysisWorkspace", () => {
       result: { findings: [], warnings: [], clause_count: 1 },
     });
     await upload(fetchMock);
-    expect(screen.getByText(/현재 8개 실험 규칙에서 위험 신호가 탐지되지 않았습니다/)).toBeInTheDocument();
+    expect(screen.getByText(/현재 14개 실험 규칙에서 위험 신호가 탐지되지 않았습니다/)).toBeInTheDocument();
     expect(screen.getByText(/안전성이나 적법성을 보장하지 않습니다/)).toBeInTheDocument();
   });
 

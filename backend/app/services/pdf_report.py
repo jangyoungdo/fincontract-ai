@@ -71,6 +71,7 @@ def build_pdf_report(analysis_id: str, result: dict | None) -> bytes:
 
     safe_result = result or {}
     findings = safe_result.get("findings", [])
+    candidate_findings = safe_result.get("candidate_findings", [])
     story = [
         Paragraph("FinContract AI 계약 검토 리포트", title),
         Spacer(1, 6 * mm),
@@ -82,6 +83,7 @@ def build_pdf_report(analysis_id: str, result: dict | None) -> bytes:
                 ["상태", _paragraph(safe_result.get("disposition", "unknown"), body)],
                 ["조항 수", str(safe_result.get("clause_count", 0))],
                 ["검토 신호", str(len(findings))],
+                ["추가 검토 후보", str(len(candidate_findings))],
             ],
             colWidths=[35 * mm, 120 * mm],
             style=TableStyle([
@@ -97,14 +99,17 @@ def build_pdf_report(analysis_id: str, result: dict | None) -> bytes:
     if not findings:
         story.extend([
             Paragraph("실험 규칙 신호 없음", heading),
-            Paragraph("현재 8개 실험 규칙에서 위험 신호가 탐지되지 않았습니다. 이는 계약의 안전성이나 적법성을 보장하지 않습니다.", warning),
+            Paragraph("현재 14개 실험 규칙에서 위험 신호가 탐지되지 않았습니다. 이는 계약의 안전성이나 적법성을 보장하지 않습니다.", warning),
         ])
 
     for index, finding in enumerate(findings, start=1):
         signal = finding.get("rule_signal", {})
         explanation = finding.get("explanation", {})
-        clause_number = finding.get("clause", {}).get("number")
-        prefix = f"제{clause_number}조 · " if clause_number else ""
+        clause = finding.get("clause", {})
+        clause_number = clause.get("number")
+        label = clause.get("label") or (f"제{clause_number}조" if clause_number else "")
+        subclause_label = clause.get("subclause_label")
+        prefix = f"{label}{f' · {subclause_label}' if subclause_label else ''} · " if label else ""
         story.extend([
             Paragraph(f"{index}. {escape(prefix + str(signal.get('rule_name', signal.get('category', '검토 신호'))))}", heading),
             Paragraph("정확히 탐지된 문구", subheading),
@@ -156,6 +161,20 @@ def build_pdf_report(analysis_id: str, result: dict | None) -> bytes:
         ])
         for issue in verification.get("issues", []):
             story.append(_paragraph(f"• {issue.get('code', 'VERIFY_ERROR')}: {issue.get('message', '')}", warning))
+
+    if candidate_findings:
+        story.append(Paragraph("추가 검토 후보", heading))
+        story.append(_paragraph("아래 항목은 결정론 규칙 신호가 아니라 로컬 분류 사전 기반 후보입니다. 법률 판단이나 확정 신호로 사용하지 않습니다.", warning))
+        for candidate in candidate_findings:
+            clause = candidate.get("clause", {})
+            label = clause.get("label") or f"제{clause.get('number', '?')}조"
+            story.extend([
+                Paragraph(f"{escape(label)} · {escape(str(candidate.get('name', '검토 후보')))}", subheading),
+                _paragraph(candidate.get("source", {}).get("masked_text"), quote),
+                _paragraph(f"겹친 분류 용어: {', '.join(candidate.get('matched_terms', []))}", body),
+            ])
+            for question in candidate.get("review_questions", []):
+                story.append(_paragraph(f"• 확인 질문: {question}", body))
 
     document.build(story, onFirstPage=_draw_footer, onLaterPages=_draw_footer)
     return buffer.getvalue()
