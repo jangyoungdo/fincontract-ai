@@ -8,7 +8,7 @@ from io import BytesIO
 from pathlib import Path
 
 from fastapi import APIRouter, File, HTTPException, Response, UploadFile, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 
 from app.config import get_settings
 from app.models import AnalysisRecord, DocumentRecord, get_session_factory
@@ -19,7 +19,12 @@ from app.services.audit import add_audit_event
 from app.services.encrypted_storage import read_encrypted, write_encrypted
 from app.services.file_validation import validate_file
 from app.services.pdf_report import build_pdf_report
-from app.services.text_extraction import extract_text
+from app.services.source_previews import (
+    delete_preview_tree,
+    generate_pdf_source_previews,
+    preview_path,
+)
+from app.services.text_extraction import extract_document, extract_text
 
 router = APIRouter(prefix="/api/v1", tags=["documents"])
 
@@ -96,6 +101,14 @@ def delete_document(document_id: str) -> DeleteResponse:
         path = Path(document.storage_path)
         if path.exists():
             path.unlink()
+        analysis_ids = [
+            item.id
+            for item in session.query(AnalysisRecord).filter(
+                AnalysisRecord.document_id == document_id
+            )
+        ]
+        for analysis_id in analysis_ids:
+            delete_preview_tree(get_settings().report_dir, analysis_id)
         document.status = "deleted"
         document.masked_text = None
         document.deleted_at = datetime.now(timezone.utc)
@@ -115,7 +128,7 @@ def create_analysis(document_id: str, request: AnalysisRequest, response: Respon
             raise HTTPException(status_code=404, detail="문서를 찾을 수 없습니다.")
         data = read_encrypted(Path(document.storage_path))
         extension = Path(document.original_filename).suffix.lower()
-        text = extract_text(data, extension)
+        extracted = extract_document(data, extension)
         record = AnalysisRecord(
             id=analysis_id,
             document_id=document_id,
@@ -159,7 +172,16 @@ def create_analysis(document_id: str, request: AnalysisRequest, response: Respon
                 progress={"state": "queued", "percent": 0},
             )
         try:
-            result = DocumentAnalysisPipeline().run(text, request.experiment_arm)
+            result = DocumentAnalysisPipeline().run(
+                extracted.text,
+                request.experiment_arm,
+                pages=extracted.pages,
+                source_extension=extension,
+            )
+            if extension == ".pdf":
+                result = generate_pdf_source_previews(
+                    data, analysis_id, result, settings.report_dir, settings, extracted.pages
+                )
             record.status = "completed"
             record.disposition = result["disposition"]
             record.result_json = json.dumps(result, ensure_ascii=False)
@@ -206,10 +228,49 @@ def get_analysis(analysis_id: str) -> AnalysisResponse:
             status=record.status,
             disposition=record.disposition,
             experiment_arm=record.experiment_arm,
-            result=json.loads(record.result_json) if record.result_json else None,
+            result=_public_result(json.loads(record.result_json)) if record.result_json else None,
             error_code=record.error_code,
             retryable=_is_retryable_error(record.error_code),
             progress=progress,
+        )
+
+
+def _public_result(result: dict) -> dict:
+    """Strip legacy full-document text before any persisted result leaves the API."""
+    document = result.get("document")
+    if isinstance(document, dict):
+        document.pop("masked_text", None)
+    return result
+
+
+@router.get("/analyses/{analysis_id}/source-previews/{preview_id}.png")
+def get_source_preview(analysis_id: str, preview_id: str) -> FileResponse:
+    """Serve only a generated masked PNG belonging to a live analysis document."""
+    with get_session_factory()() as session:
+        record = session.get(AnalysisRecord, analysis_id)
+        if not record:
+            raise HTTPException(status_code=404, detail="분석을 찾을 수 없습니다.")
+        document = session.get(DocumentRecord, record.document_id)
+        if not document or document.deleted_at:
+            raise HTTPException(status_code=404, detail="원문 조각을 찾을 수 없습니다.")
+        result = json.loads(record.result_json) if record.result_json else {}
+        allowed = {
+            value
+            for item in [*result.get("findings", []), *result.get("candidate_findings", [])]
+            for value in item.get("source", {}).get("preview_ids", [])
+        }
+        if preview_id not in allowed:
+            raise HTTPException(status_code=404, detail="원문 조각을 찾을 수 없습니다.")
+        try:
+            path = preview_path(get_settings().report_dir, analysis_id, preview_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail="원문 조각을 찾을 수 없습니다.") from exc
+        if not path.is_file():
+            raise HTTPException(status_code=404, detail="원문 조각을 찾을 수 없습니다.")
+        return FileResponse(
+            path,
+            media_type="image/png",
+            headers={"Cache-Control": "no-store"},
         )
 
 

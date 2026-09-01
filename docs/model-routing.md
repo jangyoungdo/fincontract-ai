@@ -14,7 +14,15 @@
 | 결과 검증 | deterministic | 0 | 현재 evidence ID, 인용 상태, 스키마와 단정 표현을 코드로 검사 |
 | 최종 재검토 | deep | 2,400 | 고위험이면서 근거가 충돌할 때만 제한적으로 사용 |
 
-`fast`, `balanced`, `deep`은 코드에 특정 모델명을 고정하지 않는 논리 등급입니다. 배포 환경에서 다음 설정으로 실제 Anthropic 모델 ID를 연결합니다.
+`fast`, `balanced`, `deep`은 코드에 특정 모델명을 고정하지 않는 논리 등급입니다. OpenAI 실험에서는 다음 설정으로 실제 모델 ID를 연결합니다.
+
+```dotenv
+OPENAI_FAST_MODEL=gpt-5.6-luna
+OPENAI_BALANCED_MODEL=gpt-5.6-luna
+OPENAI_DEEP_MODEL=gpt-5.6-terra
+```
+
+Anthropic 공급자는 기존 결과 재현과 롤백을 위해 당분간 유지하며 다음 환경변수를 사용합니다.
 
 ```dotenv
 ANTHROPIC_FAST_MODEL=<현재 사용 가능한 Haiku 계열 모델 ID>
@@ -46,6 +54,11 @@ ANTHROPIC_DEEP_MODEL=<현재 사용 가능한 Opus 계열 모델 ID>
 - 매 호출의 input/output/cache token, 모델, 역할, latency와 재시도 원인을 기록합니다.
 
 ## 실제 연결 최소 검증
+
+OpenAI는 `make openai-check`로 합성 데이터 1건만 전송합니다. Responses API 요청은
+`store=false`와 JSON Schema 형식을 사용합니다. 출력 본문·prompt·API 키는 로그에 남기지 않고
+모델, 응답 ID, 토큰 수, 지연시간, schema 및 근거 검증 상태만 출력합니다. 이 호출은 이미 탐지된
+규칙 결과의 설명 보강만 시험하므로 규칙·의미 탐지 점수의 향상을 뜻하지 않습니다.
 
 테스트 전용 키와 합성 데이터만 사용해 `make claude-check`를 실행합니다. 이 명령은 한 번의
 bounded structured-output 요청만 보내며 prompt·응답 본문·키를 출력하지 않고 모델,

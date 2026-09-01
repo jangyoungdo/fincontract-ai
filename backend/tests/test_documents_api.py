@@ -1,3 +1,5 @@
+import json
+from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from pathlib import Path
 
@@ -5,8 +7,8 @@ from docx import Document
 from fastapi.testclient import TestClient
 from pypdf import PdfReader, PdfWriter
 
-from app.main import app
 from app.config import get_settings
+from app.main import app
 from app.models import AnalysisRecord, AuditEvent, DocumentRecord, get_session_factory
 
 SAMPLE = "제1조 은행은 필요하다고 인정하는 경우 서비스 내용을 일방적으로 변경할 수 있다."
@@ -91,6 +93,78 @@ def test_txt_upload_analysis_report_and_delete() -> None:
                 for event in session.query(AuditEvent).filter(AuditEvent.document_id == document_id)
             }
         assert {"document_uploaded", "analysis_created", "analysis_completed", "report_generated", "document_deleted"}.issubset(event_types)
+
+
+def test_public_result_strips_legacy_full_text_and_preview_is_owned_and_deleted(tmp_path) -> None:
+    settings = get_settings()
+    document_id = "preview-owner-document"
+    analysis_id = "preview-owner-analysis"
+    preview_id = "a" * 24
+    encrypted_path = tmp_path / "preview-owner.txt.enc"
+    encrypted_path.write_bytes(b"encrypted-placeholder")
+    preview_file = settings.report_dir / "previews" / analysis_id / f"{preview_id}.png"
+    preview_file.parent.mkdir(parents=True, exist_ok=True)
+    preview_file.write_bytes(b"\x89PNG\r\n\x1a\nmasked-pixels")
+    now = datetime.now(timezone.utc)
+    result = {
+        "document": {"masked_text": "[NAME_1]의 문서 전문", "pii_replacement_count": 1},
+        "findings": [
+            {
+                "source": {
+                    "masked_text": "[NAME_1]의 조항 조각",
+                    "preview_status": "available",
+                    "preview_ids": [preview_id],
+                }
+            }
+        ],
+        "candidate_findings": [],
+    }
+    with get_session_factory()() as session:
+        session.add(
+            DocumentRecord(
+                id=document_id,
+                original_filename="preview-owner.txt",
+                mime_type="text/plain",
+                sha256="1" * 64,
+                status="ready",
+                storage_path=str(encrypted_path),
+                uploaded_at=now,
+                expires_at=now + timedelta(hours=1),
+            )
+        )
+        session.add(
+            AnalysisRecord(
+                id=analysis_id,
+                document_id=document_id,
+                status="completed",
+                disposition="ready_for_review",
+                experiment_arm="full",
+                result_json=json.dumps(result, ensure_ascii=False),
+            )
+        )
+        session.commit()
+
+    with TestClient(app) as client:
+        public_result = client.get(f"/api/v1/analyses/{analysis_id}")
+        preview = client.get(
+            f"/api/v1/analyses/{analysis_id}/source-previews/{preview_id}.png"
+        )
+        unowned = client.get(
+            f"/api/v1/analyses/{analysis_id}/source-previews/{'b' * 24}.png"
+        )
+        deleted = client.delete(f"/api/v1/documents/{document_id}")
+        expired_preview = client.get(
+            f"/api/v1/analyses/{analysis_id}/source-previews/{preview_id}.png"
+        )
+
+    assert "masked_text" not in public_result.json()["result"]["document"]
+    assert preview.status_code == 200
+    assert preview.headers["content-type"] == "image/png"
+    assert preview.headers["cache-control"] == "no-store"
+    assert unowned.status_code == 404
+    assert deleted.status_code == 200
+    assert expired_preview.status_code == 404
+    assert not preview_file.exists()
 
 
 def test_rejects_spoofed_pdf() -> None:

@@ -6,8 +6,9 @@ import json
 import time
 from typing import Any, Literal, Protocol
 
+import httpx
 from anthropic import Anthropic, APIConnectionError, APIStatusError, APITimeoutError, RateLimitError
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app.config import get_settings
 
@@ -44,6 +45,8 @@ class Provider(Protocol):
 
 class AssessmentOutput(BaseModel):
     """Strict schema that prevents free-form provider output entering the pipeline."""
+    model_config = ConfigDict(extra="forbid")
+
     risk_level: Literal["low", "medium", "high"]
     applicability: Literal["applicable", "not_applicable", "unknown"]
     summary: str = Field(min_length=1, max_length=1000)
@@ -163,13 +166,135 @@ class AnthropicProvider:
         return dict(self._last_call)
 
 
+class OpenAIProvider:
+    """Call the OpenAI Responses API with non-stored structured output."""
+
+    name = "openai"
+    endpoint = "https://api.openai.com/v1/responses"
+
+    def __init__(self, api_key: str, timeout_seconds: float = 30.0) -> None:
+        self.client = httpx.Client(
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            timeout=timeout_seconds,
+        )
+        self._last_call: dict[str, Any] = {}
+
+    def assess(
+        self,
+        rule_signal: dict[str, Any],
+        evidence: list[dict[str, Any]],
+        model: str,
+        max_tokens: int = 600,
+    ) -> dict[str, Any]:
+        """Assess one masked rule finding without sending document bytes or full text."""
+        prompt = {
+            "task": (
+                "주어진 위험 신호와 검색 근거만 사용해 신중한 한국어 검토 의견을 작성하세요. "
+                "위법·적법·무효를 확정하지 말고, 제공된 evidence_id만 인용하세요."
+            ),
+            "prompt_version": PROMPT_VERSION,
+            "rule_signal": rule_signal,
+            "evidence": evidence,
+        }
+        serialized_prompt = json.dumps(prompt, ensure_ascii=False)
+        from app.prototype.pii import mask_pii
+
+        masking = mask_pii(serialized_prompt)
+        if not masking.passed or masking.replacement_count:
+            raise ProviderError("OUTBOUND_PII_BLOCKED", retryable=False)
+
+        payload = {
+            "model": model,
+            "store": False,
+            "instructions": (
+                "You are a contract-review assistant. Return only schema-valid JSON in Korean. "
+                "Never make a final legal conclusion."
+            ),
+            "input": serialized_prompt,
+            "max_output_tokens": max_tokens,
+            "text": {
+                "format": {
+                    "type": "json_schema",
+                    "name": "fincontract_assessment",
+                    "strict": True,
+                    "schema": AssessmentOutput.model_json_schema(),
+                }
+            },
+        }
+        started = time.perf_counter()
+        try:
+            response = self.client.post(self.endpoint, json=payload)
+        except (httpx.TimeoutException, httpx.TransportError) as exc:
+            raise ProviderError("LLM_UNAVAILABLE", retryable=True) from exc
+        if response.status_code == 429:
+            try:
+                api_error_code = (response.json().get("error") or {}).get("code")
+            except (AttributeError, TypeError, ValueError):
+                api_error_code = None
+            if api_error_code in {"insufficient_quota", "billing_hard_limit_reached"}:
+                raise ProviderError("LLM_QUOTA_EXCEEDED", retryable=False)
+            raise ProviderError("LLM_RATE_LIMITED", retryable=True)
+        if response.status_code >= 500:
+            raise ProviderError("LLM_UNAVAILABLE", retryable=True)
+        if response.status_code >= 400:
+            raise ProviderError("LLM_REQUEST_REJECTED", retryable=False)
+
+        elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
+        try:
+            body = response.json()
+            text = self._output_text(body)
+            assessment = AssessmentOutput.model_validate_json(text).model_dump()
+        except (KeyError, TypeError, ValueError, ValidationError) as exc:
+            raise ProviderError("LLM_SCHEMA_INVALID", retryable=False) from exc
+        usage = body.get("usage") or {}
+        self._last_call = {
+            "prompt_version": PROMPT_VERSION,
+            "model": body.get("model", model),
+            "response_id": body.get("id"),
+            "latency_ms": elapsed_ms,
+            "input_tokens": usage.get("input_tokens"),
+            "output_tokens": usage.get("output_tokens"),
+            "stored": False,
+        }
+        return assessment
+
+    @staticmethod
+    def _output_text(body: dict[str, Any]) -> str:
+        parts: list[str] = []
+        for item in body.get("output", []):
+            if item.get("type") != "message":
+                continue
+            for content in item.get("content", []):
+                if content.get("type") == "output_text" and content.get("text"):
+                    parts.append(str(content["text"]))
+        if not parts:
+            raise ValueError("response contained no output_text")
+        return "".join(parts)
+
+    def last_call_metadata(self) -> dict[str, Any]:
+        """Return only non-content telemetry for audit and cost measurement."""
+        return dict(self._last_call)
+
+
 def get_provider() -> Provider:
     """Select a provider and fail closed unless every external-call guard is set."""
     settings = get_settings()
     if settings.llm_provider == "fake":
         return FakeProvider()
+    if settings.llm_provider == "openai":
+        if not settings.allow_external_llm:
+            raise RuntimeError("OpenAI is disabled: set ALLOW_EXTERNAL_LLM=true explicitly")
+        if not settings.openai_api_key:
+            raise RuntimeError("OPENAI_API_KEY is required when OpenAI is enabled")
+        return OpenAIProvider(
+            settings.openai_api_key,
+            timeout_seconds=settings.openai_timeout_seconds,
+        )
     if settings.llm_provider != "anthropic":
-        raise RuntimeError("LLM_PROVIDER must be 'fake' or 'anthropic'")
+        raise RuntimeError("LLM_PROVIDER must be 'fake', 'openai', or 'anthropic'")
     if not settings.allow_external_llm:
         raise RuntimeError("Anthropic is disabled: set ALLOW_EXTERNAL_LLM=true explicitly")
     if not settings.anthropic_api_key:

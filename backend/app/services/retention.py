@@ -8,9 +8,10 @@ from pathlib import Path
 from sqlalchemy import delete, select
 
 from app.config import get_settings
-from app.models import AuditEvent, DocumentRecord, get_session_factory
+from app.models import AnalysisRecord, AuditEvent, DocumentRecord, get_session_factory
 
 from .audit import add_audit_event
+from .source_previews import delete_preview_tree
 
 
 def delete_expired_documents(now: datetime | None = None) -> int:
@@ -28,6 +29,14 @@ def delete_expired_documents(now: datetime | None = None) -> int:
             path = Path(document.storage_path)
             if path.exists():
                 path.unlink()
+            analysis_ids = [
+                item.id
+                for item in session.query(AnalysisRecord).filter(
+                    AnalysisRecord.document_id == document.id
+                )
+            ]
+            for analysis_id in analysis_ids:
+                delete_preview_tree(get_settings().report_dir, analysis_id)
             document.status = "expired"
             document.masked_text = None
             document.deleted_at = cutoff

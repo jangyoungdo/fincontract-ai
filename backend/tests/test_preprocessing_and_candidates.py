@@ -1,4 +1,4 @@
-from app.prototype.pii import mask_pii
+from app.prototype.pii import mask_pii, mask_pii_pages
 from app.services.analysis_pipeline import DocumentAnalysisPipeline
 from app.services.candidate_finder import CandidateFinder
 from app.services.clause_segmenter import segment_clauses
@@ -18,6 +18,13 @@ def test_explicit_and_complete_identity_contexts_are_masked() -> None:
     assert result.passed
     assert "홍길동" not in result.masked_text
     assert "김철수" not in result.masked_text
+
+
+def test_page_masking_uses_document_global_replacement_numbers() -> None:
+    result, pages = mask_pii_pages(("성명: 홍길동", "성명: 김철수"))
+    assert result.replacement_count == 2
+    assert "[NAME_1]" in pages[0]
+    assert "[NAME_2]" in pages[1]
 
 
 def test_article_segmenter_preserves_numbered_items_in_one_article() -> None:
@@ -85,3 +92,26 @@ def test_full_pipeline_preserves_rules_only_findings(monkeypatch) -> None:
     project = lambda result: [(item["finding_id"], item["rule_signal"]) for item in result["findings"]]
     assert project(full) == project(baseline)
     assert full["experiment"]["mode"] == "full"
+
+
+def test_pipeline_maps_a_rule_match_to_its_pdf_page(monkeypatch) -> None:
+    pipeline = DocumentAnalysisPipeline()
+    monkeypatch.setattr(pipeline, "_retrieve_evidence", lambda _: [])
+    monkeypatch.setattr(pipeline.candidates, "suggest", lambda text, excluded: [])
+    pages = (
+        "계약서 안내와 표지",
+        "제1조 은행은 필요하다고 인정하는 경우 계약 내용을 변경할 수 있다.",
+    )
+    result = pipeline.run("\n".join(pages), pages=pages, source_extension=".pdf")
+    assert result["findings"][0]["source"]["page_number"] == 2
+    assert result["document"]["page_count"] == 2
+
+
+def test_cross_page_preview_targets_are_bounded_to_two_pages() -> None:
+    targets = DocumentAnalysisPipeline._preview_targets(
+        "abc\nDEF", 0, 2, 6, ((0, 3, 1), (4, 7, 2))
+    )
+    assert targets == [
+        {"page_number": 1, "text": "c"},
+        {"page_number": 2, "text": "DE"},
+    ]

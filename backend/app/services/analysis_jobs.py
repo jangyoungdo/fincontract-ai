@@ -16,7 +16,8 @@ from app.models import AnalysisRecord, DocumentRecord, get_session_factory
 from .analysis_pipeline import DocumentAnalysisPipeline
 from .audit import add_audit_event
 from .encrypted_storage import read_encrypted
-from .text_extraction import extract_text
+from .source_previews import generate_pdf_source_previews
+from .text_extraction import extract_document
 
 QUEUE_NAME = "fincontract:analysis:queue"
 DEAD_LETTER_QUEUE_NAME = "fincontract:analysis:dead-letter"
@@ -78,8 +79,23 @@ def process_analysis(analysis_id: str, redis_client: Redis | None = None) -> Non
             set_progress(redis_client, analysis_id, "analyzing", 25)
         try:
             data = read_encrypted(Path(document.storage_path))
-            text = extract_text(data, Path(document.original_filename).suffix.lower())
-            result = DocumentAnalysisPipeline().run(text, record.experiment_arm)
+            extension = Path(document.original_filename).suffix.lower()
+            extracted = extract_document(data, extension)
+            result = DocumentAnalysisPipeline().run(
+                extracted.text,
+                record.experiment_arm,
+                pages=extracted.pages,
+                source_extension=extension,
+            )
+            if extension == ".pdf":
+                result = generate_pdf_source_previews(
+                    data,
+                    analysis_id,
+                    result,
+                    get_settings().report_dir,
+                    get_settings(),
+                    extracted.pages,
+                )
             record.status = "completed"
             record.disposition = result["disposition"]
             record.result_json = json.dumps(result, ensure_ascii=False)

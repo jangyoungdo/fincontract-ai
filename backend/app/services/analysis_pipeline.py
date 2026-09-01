@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from app.config import get_settings
 from app.prototype import PrototypePipeline
-from app.prototype.pii import mask_pii
+from app.prototype.pii import mask_pii, mask_pii_pages
 
 from .candidate_finder import CandidateFinder
 from .clause_segmenter import segment_clauses
+from .deterministic_summary import enrich_summaries
 from .retrieval import HybridRetriever
 
 
@@ -16,12 +17,25 @@ class DocumentAnalysisPipeline:
         self.retriever = HybridRetriever()
         self.candidates = CandidateFinder(self.prototype.rules)
 
-    def run(self, text: str, experiment_arm: str | None = None, *, evaluation_mode: str = "full") -> dict:
+    def run(
+        self,
+        text: str,
+        experiment_arm: str | None = None,
+        *,
+        evaluation_mode: str = "full",
+        pages: tuple[str, ...] | None = None,
+        source_extension: str | None = None,
+    ) -> dict:
         """Analyze a document. Legacy A/D input is accepted but does not select product behavior."""
         if evaluation_mode not in {"full", "rules_only"}:
             raise ValueError("evaluation_mode must be full or rules_only")
         settings = get_settings()
-        document_masking = mask_pii(text)
+        if pages:
+            document_masking, masked_pages = mask_pii_pages(pages)
+        else:
+            document_masking = mask_pii(text)
+            masked_pages = (document_masking.masked_text,)
+        page_ranges = self._page_ranges(masked_pages)
         if not document_masking.passed:
             return {
                 "status": "completed",
@@ -30,9 +44,10 @@ class DocumentAnalysisPipeline:
                 "findings": [],
                 "warnings": ["개인정보 마스킹 검증에 실패해 분석을 중단했습니다."],
                 "document": {
-                    "masked_text": "",
                     "pii_types": document_masking.detected_types,
                     "pii_replacement_count": document_masking.replacement_count,
+                    "page_count": len(masked_pages),
+                    "source_type": (source_extension or "").lstrip(".") or "text",
                 },
                 "usage": {"calls": []},
                 "experiment": {"arm": experiment_arm, "provider": "none"},
@@ -74,6 +89,21 @@ class DocumentAnalysisPipeline:
                 subclause = clause.subclause_for_offset(finding["source"]["match_span"][0])
                 if subclause:
                     finding["clause"]["subclause_label"] = subclause.label
+                absolute_match = clause.char_start + finding["source"]["match_span"][0]
+                absolute_match_end = clause.char_start + finding["source"]["match_span"][1]
+                finding["source"]["page_number"] = self._page_for_offset(
+                    absolute_match, page_ranges
+                )
+                if source_extension == ".pdf":
+                    finding["source"]["_preview_targets"] = self._preview_targets(
+                        clause.text,
+                        clause.char_start,
+                        absolute_match,
+                        absolute_match_end,
+                        page_ranges,
+                    )
+                finding["source"]["preview_status"] = "text_only"
+                finding["source"]["preview_ids"] = []
                 findings.append(finding)
             if evaluation_mode == "full" and settings.semantic_model_enabled:
                 matched_categories = {
@@ -82,11 +112,32 @@ class DocumentAnalysisPipeline:
                 for candidate, evidence_text, subclause_label in self._semantic_candidates(
                     clause, matched_categories
                 ):
+                    segment_start = clause.text.find(evidence_text)
+                    absolute_start = clause.char_start + max(0, segment_start)
                     candidate_findings.append(
                         {
                             **candidate,
                             "candidate_id": f"candidate:{clause.section_id}:{candidate['category']}",
-                            "source": {"masked_text": evidence_text, "match_span": [0, len(evidence_text)]},
+                            "source": {
+                                "masked_text": evidence_text,
+                                "match_span": [0, len(evidence_text)],
+                                "page_number": self._page_for_offset(absolute_start, page_ranges),
+                                **(
+                                    {
+                                        "_preview_targets": self._preview_targets(
+                                            evidence_text,
+                                            absolute_start,
+                                            absolute_start,
+                                            absolute_start + len(evidence_text),
+                                            page_ranges,
+                                        )
+                                    }
+                                    if source_extension == ".pdf"
+                                    else {}
+                                ),
+                                "preview_status": "text_only",
+                                "preview_ids": [],
+                            },
                             "clause": {
                                 "number": clause.number,
                                 "label": clause.label,
@@ -112,7 +163,7 @@ class DocumentAnalysisPipeline:
             disposition = "no_signal"
         else:
             disposition = "ready_for_review"
-        return {
+        return enrich_summaries({
             "status": "completed",
             "disposition": disposition,
             "clause_count": len(clauses),
@@ -120,9 +171,10 @@ class DocumentAnalysisPipeline:
             "candidate_findings": candidate_findings,
             "warnings": sorted(warnings),
             "document": {
-                "masked_text": document_masking.masked_text,
                 "pii_types": document_masking.detected_types,
                 "pii_replacement_count": document_masking.replacement_count,
+                "page_count": len(masked_pages),
+                "source_type": (source_extension or "").lstrip(".") or "text",
             },
             "usage": {"calls": usage_calls},
             "experiment": {
@@ -134,7 +186,48 @@ class DocumentAnalysisPipeline:
                 "ruleset": self.prototype.rules.version,
                 "semantic": self.candidates.metadata if evaluation_mode == "full" else None,
             },
-        }
+        })
+
+    @staticmethod
+    def _page_ranges(pages: tuple[str, ...]) -> tuple[tuple[int, int, int], ...]:
+        """Return one-based page ranges in the same newline-joined masked string."""
+        ranges: list[tuple[int, int, int]] = []
+        cursor = 0
+        for number, page in enumerate(pages, start=1):
+            ranges.append((cursor, cursor + len(page), number))
+            cursor += len(page) + 1
+        return tuple(ranges)
+
+    @staticmethod
+    def _page_for_offset(offset: int, ranges: tuple[tuple[int, int, int], ...]) -> int | None:
+        for start, end, number in ranges:
+            if start <= offset <= end:
+                return number
+        return ranges[-1][2] if ranges and offset > ranges[-1][1] else None
+
+    @staticmethod
+    def _preview_targets(
+        source_text: str,
+        source_start: int,
+        match_start: int,
+        match_end: int,
+        ranges: tuple[tuple[int, int, int], ...],
+    ) -> list[dict]:
+        """Describe at most two page-local fragments for a cross-page match."""
+        targets: list[dict] = []
+        for page_start, page_end, page_number in ranges:
+            start = max(match_start, page_start)
+            end = min(match_end, page_end)
+            if start >= end:
+                continue
+            local_start = max(0, start - source_start)
+            local_end = min(len(source_text), end - source_start)
+            fragment = source_text[local_start:local_end].strip()
+            if fragment:
+                targets.append({"page_number": page_number, "text": fragment})
+            if len(targets) == 2:
+                break
+        return targets
 
     def _semantic_candidates(
         self, clause, excluded_categories: set[str]

@@ -5,7 +5,7 @@ import pytest
 from anthropic import APIStatusError, APITimeoutError, RateLimitError
 
 from app.config import get_settings
-from app.llm.provider import AnthropicProvider, ProviderError, get_provider
+from app.llm.provider import AnthropicProvider, OpenAIProvider, ProviderError, get_provider
 
 
 @pytest.fixture(autouse=True)
@@ -27,6 +27,24 @@ def test_anthropic_requires_explicit_opt_in(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     get_settings.cache_clear()
     with pytest.raises(RuntimeError, match="ALLOW_EXTERNAL_LLM"):
+        get_provider()
+
+
+def test_openai_requires_explicit_opt_in(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.delenv("ALLOW_EXTERNAL_LLM", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    get_settings.cache_clear()
+    with pytest.raises(RuntimeError, match="ALLOW_EXTERNAL_LLM"):
+        get_provider()
+
+
+def test_openai_requires_key_after_opt_in(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setenv("ALLOW_EXTERNAL_LLM", "true")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    get_settings.cache_clear()
+    with pytest.raises(RuntimeError, match="OPENAI_API_KEY"):
         get_provider()
 
 
@@ -146,6 +164,140 @@ def test_anthropic_provider_blocks_unmasked_pii_before_network_call() -> None:
         )
     assert not caught.value.retryable
     assert not called
+
+
+def test_openai_provider_uses_non_stored_structured_response() -> None:
+    captured = {}
+
+    class Response:
+        status_code = 200
+
+        @staticmethod
+        def json():
+            return {
+                "id": "resp_test",
+                "model": "gpt-test-model",
+                "usage": {"input_tokens": 90, "output_tokens": 40},
+                "output": [
+                    {
+                        "type": "message",
+                        "content": [
+                            {
+                                "type": "output_text",
+                                "text": (
+                                    '{"risk_level":"medium","applicability":"unknown",'
+                                    '"summary":"검토 필요","rationale":"근거 확인 필요",'
+                                    '"counter_considerations":[],"review_questions":[],'
+                                    '"cited_evidence_ids":["verified:1"]}'
+                                ),
+                            }
+                        ],
+                    }
+                ],
+            }
+
+    class Client:
+        @staticmethod
+        def post(endpoint, **kwargs):
+            captured.update({"endpoint": endpoint, **kwargs})
+            return Response()
+
+    provider = OpenAIProvider.__new__(OpenAIProvider)
+    provider.client = Client()
+    provider._last_call = {}
+    result = provider.assess(
+        {"category": "test", "rationale": "masked"},
+        [{"evidence_id": "verified:1"}],
+        "gpt-test-model",
+    )
+
+    assert result["cited_evidence_ids"] == ["verified:1"]
+    assert captured["endpoint"] == "https://api.openai.com/v1/responses"
+    assert captured["json"]["store"] is False
+    assert captured["json"]["text"]["format"]["type"] == "json_schema"
+    assert captured["json"]["text"]["format"]["strict"] is True
+    assert provider.last_call_metadata()["input_tokens"] == 90
+    assert provider.last_call_metadata()["output_tokens"] == 40
+    assert provider.last_call_metadata()["stored"] is False
+    assert "content" not in provider.last_call_metadata()
+
+
+def test_openai_provider_blocks_unmasked_pii_before_network_call() -> None:
+    class Client:
+        @staticmethod
+        def post(*args, **kwargs):
+            raise AssertionError("network call must not occur")
+
+    provider = OpenAIProvider.__new__(OpenAIProvider)
+    provider.client = Client()
+    provider._last_call = {}
+    with pytest.raises(ProviderError, match="OUTBOUND_PII_BLOCKED") as caught:
+        provider.assess(
+            {"category": "test", "rationale": "주민번호 900101-1234567"},
+            [{"evidence_id": "verified:1"}],
+            "gpt-test-model",
+        )
+    assert not caught.value.retryable
+
+
+@pytest.mark.parametrize(
+    ("status_code", "expected_code", "retryable"),
+    [
+        (429, "LLM_RATE_LIMITED", True),
+        (500, "LLM_UNAVAILABLE", True),
+        (400, "LLM_REQUEST_REJECTED", False),
+    ],
+)
+def test_openai_provider_classifies_http_failures(
+    status_code: int,
+    expected_code: str,
+    retryable: bool,
+) -> None:
+    class Response:
+        pass
+
+    Response.status_code = status_code
+
+    class Client:
+        @staticmethod
+        def post(*args, **kwargs):
+            return Response()
+
+    provider = OpenAIProvider.__new__(OpenAIProvider)
+    provider.client = Client()
+    provider._last_call = {}
+    with pytest.raises(ProviderError, match=expected_code) as caught:
+        provider.assess(
+            {"category": "test", "rationale": "masked"},
+            [{"evidence_id": "verified:1"}],
+            "gpt-test-model",
+        )
+    assert caught.value.retryable is retryable
+
+
+def test_openai_provider_classifies_exhausted_quota_as_non_retryable() -> None:
+    class Response:
+        status_code = 429
+
+        @staticmethod
+        def json():
+            return {"error": {"code": "insufficient_quota"}}
+
+    class Client:
+        @staticmethod
+        def post(*args, **kwargs):
+            return Response()
+
+    provider = OpenAIProvider.__new__(OpenAIProvider)
+    provider.client = Client()
+    provider._last_call = {}
+    with pytest.raises(ProviderError, match="LLM_QUOTA_EXCEEDED") as caught:
+        provider.assess(
+            {"category": "test", "rationale": "masked"},
+            [{"evidence_id": "verified:1"}],
+            "gpt-test-model",
+        )
+    assert not caught.value.retryable
 
 
 @pytest.mark.parametrize("response_text", ["", "{}", "not-json"])

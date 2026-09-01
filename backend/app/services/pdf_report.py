@@ -13,9 +13,19 @@ from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 from reportlab.pdfgen.canvas import Canvas
+from reportlab.platypus import Image as ReportImage
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
+from app.config import get_settings
+
+from .source_previews import preview_path
+
 FONT_NAME = "HYSMyeongJo-Medium"
+VERIFICATION_LABELS = {
+    "passed": "법적 근거 확인",
+    "failed": "법적 근거 추가 확인 필요",
+    "not_run": "근거 검증 미실행",
+}
 
 
 def _draw_footer(canvas: Canvas, document: SimpleDocTemplate) -> None:
@@ -44,6 +54,23 @@ def _highlighted_source(finding: dict, style: ParagraphStyle) -> Paragraph:
         markup = f"{escape(text[:start])}<b><u>{escape(text[start:end])}</u></b>{escape(text[end:])}"
         return Paragraph(markup, style)
     return _paragraph(text, style)
+
+
+def _preview_image(analysis_id: str, item: dict) -> ReportImage | None:
+    identifiers = item.get("source", {}).get("preview_ids", [])
+    if not identifiers:
+        return None
+    try:
+        path = preview_path(get_settings().report_dir, analysis_id, str(identifiers[0]))
+    except ValueError:
+        return None
+    if not path.is_file():
+        return None
+    image = ReportImage(str(path))
+    scale = min((155 * mm) / image.imageWidth, (72 * mm) / image.imageHeight, 1)
+    image.drawWidth = image.imageWidth * scale
+    image.drawHeight = image.imageHeight * scale
+    return image
 
 
 def build_pdf_report(analysis_id: str, result: dict | None) -> bytes:
@@ -95,6 +122,9 @@ def build_pdf_report(analysis_id: str, result: dict | None) -> bytes:
             ]),
         ),
     ]
+    summary = safe_result.get("summary", {})
+    if summary.get("headline"):
+        story.extend([Paragraph("핵심 요약", heading), _paragraph(summary["headline"], quote)])
 
     if not findings:
         story.extend([
@@ -109,11 +139,17 @@ def build_pdf_report(analysis_id: str, result: dict | None) -> bytes:
         clause_number = clause.get("number")
         label = clause.get("label") or (f"제{clause_number}조" if clause_number else "")
         subclause_label = clause.get("subclause_label")
+        page_number = finding.get("source", {}).get("page_number")
+        page_suffix = f" · PDF {page_number}페이지" if page_number else ""
         prefix = f"{label}{f' · {subclause_label}' if subclause_label else ''} · " if label else ""
         story.extend([
-            Paragraph(f"{index}. {escape(prefix + str(signal.get('rule_name', signal.get('category', '검토 신호'))))}", heading),
+            Paragraph(f"{index}. {escape(prefix + str(signal.get('rule_name', signal.get('category', '검토 신호'))) + page_suffix)}", heading),
+            _paragraph(finding.get("summary_sentence"), body),
             Paragraph("정확히 탐지된 문구", subheading),
-            _highlighted_source(finding, quote),
+        ])
+        preview = _preview_image(analysis_id, finding)
+        story.extend([
+            preview if preview is not None else _highlighted_source(finding, quote),
             Paragraph("왜 문제 후보인가", subheading),
             _paragraph(explanation.get("why_flagged"), body),
             Paragraph("예상되는 고객 영향", subheading),
@@ -138,24 +174,12 @@ def build_pdf_report(analysis_id: str, result: dict | None) -> bytes:
                 _paragraph(f"원문: {evidence.get('source_url', '링크 없음')} · manifest {evidence.get('manifest_version', '미상')}", body),
             ])
 
-        assessment = finding.get("assessment") or {}
-        if assessment:
-            story.extend([
-                Paragraph("AI 보충 검토", subheading),
-                _paragraph(assessment.get("summary"), body),
-                _paragraph(assessment.get("rationale"), body),
-            ])
-            for item in assessment.get("counter_considerations", []):
-                story.append(_paragraph(f"• 반대 고려사항: {item}", body))
-            for item in assessment.get("review_questions", []):
-                story.append(_paragraph(f"• 확인 질문: {item}", body))
-
         verification = finding.get("verification", {})
         grounding = finding.get("grounding", {})
         story.extend([
             Paragraph("검증 상세", subheading),
             _paragraph(
-                f"상태 {verification.get('status', 'not_run')} · 규칙 {signal.get('rule_id', '미상')} / {signal.get('rule_version', '미상')} · corpus {grounding.get('corpus_version', '미상')}",
+                f"상태 {VERIFICATION_LABELS.get(verification.get('status', 'not_run'), '근거 상태 확인 필요')} · 규칙 {signal.get('rule_id', '미상')} / {signal.get('rule_version', '미상')} · corpus {grounding.get('corpus_version', '미상')}",
                 body,
             ),
         ])
@@ -170,9 +194,12 @@ def build_pdf_report(analysis_id: str, result: dict | None) -> bytes:
             label = clause.get("label") or f"제{clause.get('number', '?')}조"
             if clause.get("subclause_label"):
                 label = f"{label} · {clause['subclause_label']}"
+            page_number = candidate.get("source", {}).get("page_number")
+            if page_number:
+                label = f"{label} · PDF {page_number}페이지"
             story.extend([
                 Paragraph(f"{escape(label)} · {escape(str(candidate.get('name', '검토 후보')))}", subheading),
-                _paragraph(candidate.get("source", {}).get("masked_text"), quote),
+                _paragraph(candidate.get("summary_sentence"), body),
                 _paragraph(
                     f"유사도 {float(candidate.get('similarity_score', 0)):.3f} · "
                     f"{candidate.get('model_id', 'local model')} · "
@@ -180,6 +207,12 @@ def build_pdf_report(analysis_id: str, result: dict | None) -> bytes:
                     body,
                 ),
             ])
+            preview = _preview_image(analysis_id, candidate)
+            story.append(
+                preview
+                if preview is not None
+                else _paragraph(candidate.get("source", {}).get("masked_text"), quote)
+            )
             for question in candidate.get("review_questions", []):
                 story.append(_paragraph(f"• 확인 질문: {question}", body))
 

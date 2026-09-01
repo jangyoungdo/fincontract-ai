@@ -1,4 +1,4 @@
-.PHONY: setup-backend setup-frontend test-backend test-frontend frontend-check api-check e2e failure-e2e migrate retention run-worker run-backend run-frontend infra-check ingest-demo ingest-public evaluate-public verify-index compose-check compose-logs wsl-check prepare-env baseline diagnostics claude-check evaluate-expert-demo
+.PHONY: setup-backend setup-frontend test-backend test-frontend frontend-check api-check e2e failure-e2e migrate retention purge-full-document-text run-worker run-backend run-frontend infra-check ingest-demo ingest-public evaluate-public verify-index compose-check compose-logs wsl-check prepare-env baseline diagnostics claude-check openai-check evaluate-expert-demo
 
 PYTHON := backend/.venv/bin/python
 
@@ -30,6 +30,9 @@ migrate:
 
 retention:
 	cd backend && .venv/bin/python scripts/enforce_retention.py
+
+purge-full-document-text:
+	cd backend && .venv/bin/python scripts/purge_full_document_text.py
 
 run-worker:
 	cd backend && .venv/bin/python scripts/run_worker.py
@@ -75,6 +78,9 @@ diagnostics:
 
 claude-check:
 	cd backend && PYTHONPATH=. .venv/bin/python scripts/check_anthropic.py
+
+openai-check:
+	set -a; . ./.env; set +a; cd backend && PYTHONPATH=. .venv/bin/python scripts/check_openai.py
 
 evaluate-expert-demo:
 	cd backend && PYTHONPATH=. .venv/bin/python scripts/evaluate_experts.py tests/fixtures/expert_annotations_synthetic_v0_1.jsonl

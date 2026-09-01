@@ -14,7 +14,8 @@
 - PDF/DOCX/TXT 추출, PII 마스킹, 19개 규칙, 오프라인 다국어 E5 의미 후보, RAG 근거 검증 구현
 - PostgreSQL 메타데이터, Redis worker 재시도·격리, ChromaDB 5개 컬렉션 구현
 - Fernet 원문 암호화, 문서 TTL, 감사 로그·만료와 관리자 보호 조회 구현
-- fake provider 전체 흐름과 Claude structured output 라우팅을 분리하고 외부 전송은 opt-in으로 제한
+- 결정론적 문서·항목 요약과 개인정보가 픽셀 단위로 제거된 PDF 원문 조각 구현
+- 공개 API와 화면에서 문서 전문을 제거하고 조각 소유권 검증·24시간 만료 삭제 구현
 - 국가법령정보센터 약관법 7개 조문과 출처·hash manifest, 로컬 검색 평가 구현
 - 백엔드 테스트와 프론트엔드 단위 테스트·프로덕션 빌드 검증
 - 리서치 통계 641건·16건은 근거 manifest 검증 전까지 후보 수로만 관리
@@ -90,12 +91,12 @@ Infrastructure         Docker Compose · CI · 비밀정보 관리 · 관측성
   → 19개 규칙 엔진
   → 오프라인 다국어 E5 의미 검토 후보
   → ChromaDB 근거 검색
-  → Claude 구조화 분석
-  → 근거·인용 검증
+  → 결정론적 요약·근거 검증
+  → 마스킹 PDF 원문 조각 생성
   → 결과 저장 및 리포트
 ```
 
-마스킹되지 않은 사용자 원문은 ChromaDB 또는 Claude API로 전달하지 않습니다. ChromaDB에는 검증된 공개·허가 리서치 코퍼스만 적재합니다.
+사용자 원문은 외부 모델 API로 전달하지 않습니다. ChromaDB에는 검증된 공개·허가 리서치 코퍼스만 적재하고, 공개 API와 브라우저에는 탐지된 조항의 마스킹 조각만 제공합니다.
 
 ## 기술 방향
 
@@ -103,7 +104,7 @@ Infrastructure         Docker Compose · CI · 비밀정보 관리 · 관측성
 - Backend: Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2
 - Operational data: PostgreSQL
 - Retrieval: ChromaDB
-- LLM: Anthropic Claude Messages API + Structured Outputs
+- Summary: 외부 생성형 모델 없이 사실 추출 + 19개 규칙 템플릿
 - Local semantic review: `intfloat/multilingual-e5-small` revision `8d923955b027282ba975c0a4c825486c9ca4c490` (MIT), weights SHA-256 `1a55775f53449dac10a2bcbc312469fac40b96d53198c407081a831f81c98477`
 - Optional async processing: Redis + Worker
 - Local runtime: Docker Compose
@@ -133,7 +134,7 @@ make migrate
 make retention
 ```
 
-원문 저장에는 `DOCUMENT_ENCRYPTION_KEY`가 반드시 필요합니다. 키는 `.env` 또는 배포 비밀 저장소에만 두고 저장소에 커밋하지 않습니다. `make retention`은 만료 문서를 한 번 정리하며, Compose의 retention 서비스는 이를 주기적으로 실행합니다.
+원문 저장에는 `DOCUMENT_ENCRYPTION_KEY`가 반드시 필요합니다. 키는 `.env` 또는 배포 비밀 저장소에만 두고 저장소에 커밋하지 않습니다. `make retention`은 만료 문서와 해당 원문 조각을 한 번 정리하며, Compose의 retention 서비스는 이를 주기적으로 실행합니다. 기존 분석 JSON에 남아 있는 문서 전문은 배포 후 `make purge-full-document-text`로 제거합니다.
 
 개발 서버는 두 터미널에서 실행합니다.
 
@@ -142,7 +143,43 @@ make run-backend
 make run-frontend
 ```
 
-그 다음 `http://localhost:3000`에서 TXT, PDF 또는 DOCX를 업로드합니다. 브라우저는 Backend 포트에 직접 접속하지 않고 현재 Frontend 주소의 `/api/v1`만 호출합니다. Next.js 서버는 `BACKEND_INTERNAL_URL`(로컬 기본값 `http://127.0.0.1:8000`, Compose `http://backend:8000`)을 통해 Backend로 전달하므로 `127.0.0.1`, LAN IP 또는 터널·프리뷰 도메인으로 Frontend에 접속해도 별도의 브라우저 API 주소 변경이 필요하지 않습니다. 공개 법령 코퍼스는 약관법 7개 조문으로 제한되어 있고 실제 Claude 연결은 기본적으로 비활성화되어 있으므로, 화면은 결정론적 규칙 설명과 fake-provider 보충 분석을 구분해 표시합니다.
+그 다음 `http://localhost:3000`에서 TXT, PDF 또는 DOCX를 업로드합니다. 브라우저는 Backend 포트에 직접 접속하지 않고 현재 Frontend 주소의 `/api/v1`만 호출합니다. Next.js 서버는 `BACKEND_INTERNAL_URL`(로컬 기본값 `http://127.0.0.1:8000`, Compose `http://backend:8000`)을 통해 Backend로 전달하므로 `127.0.0.1`, LAN IP 또는 터널·프리뷰 도메인으로 Frontend에 접속해도 별도의 브라우저 API 주소 변경이 필요하지 않습니다. 공개 법령 코퍼스는 약관법 7개 조문으로 제한되어 있고 외부 모델 연결은 기본적으로 비활성화되어 있으므로, 화면은 결정론적 규칙 설명과 fake-provider 보충 분석을 구분해 표시합니다.
+
+### OpenAI Responses API 실험
+
+OpenAI 연결은 기존 규칙 탐지를 대체하지 않습니다. `findings[]`는 그대로 보존되고, API는
+마스킹된 규칙 신호와 검색된 근거만 받아 설명을 보강합니다. 원문 파일, 마스킹 전 텍스트,
+문서 전문은 전송하지 않으며 요청의 `store`는 `false`입니다. 따라서 이 단계는 API 연결·비용·
+근거 인용 품질을 확인하는 실험이고, 미탐 회수 성능을 높이는 실험은 아닙니다.
+
+ChatGPT 또는 Codex 구독과 OpenAI API 사용량은 별개입니다. API 프로젝트에서 발급한 키를
+로컬 `.env`에만 넣고 다음 값을 변경합니다. 키를 저장소나 화면에 붙여 넣지 않습니다.
+
+```dotenv
+LLM_PROVIDER=openai
+ALLOW_EXTERNAL_LLM=true
+OPENAI_API_KEY=<OpenAI API 프로젝트에서 발급한 키>
+OPENAI_FAST_MODEL=gpt-5.6-luna
+OPENAI_BALANCED_MODEL=gpt-5.6-luna
+OPENAI_DEEP_MODEL=gpt-5.6-terra
+LLM_MAX_CALLS_PER_ANALYSIS=8
+```
+
+먼저 합성 데이터 한 건으로 실제 호출과 구조화 출력만 점검합니다.
+
+```bash
+make openai-check
+```
+
+Docker에서는 환경변수를 읽도록 Backend와 worker를 다시 생성해야 합니다.
+
+```bash
+docker compose up -d --build backend worker
+docker compose logs --tail=100 backend worker
+```
+
+실험을 중단하려면 `.env`에서 `LLM_PROVIDER=fake`, `ALLOW_EXTERNAL_LLM=false`로 되돌린 뒤
+같은 두 서비스를 다시 생성합니다. 이미 완료된 분석 결과는 변경되지 않습니다.
 
 Docker 런타임이 준비된 경우 다음 명령으로 PostgreSQL, Redis, ChromaDB, Backend와 Frontend를 함께 기동합니다.
 
@@ -164,7 +201,8 @@ backend/.venv/bin/python -c "from cryptography.fernet import Fernet; print(Ferne
 Compose에서는 PDFium 렌더링과 한국어·영어 Tesseract OCR이 활성화됩니다. 페이지 수,
 페이지별 픽셀 수, 처리시간, 최소 문자수와 영숫자 비율을 넘지 못한 문서는 각각 안정된
 `PDF_*` 또는 `OCR_*` 오류 코드로 중단됩니다. OCR 텍스트는 메모리에서만 처리되고 기존
-PII 마스킹을 통과한 뒤에만 검색·분석 경계로 이동합니다. 이미지 빌드 로그에는 설치된
+PII 마스킹을 통과한 뒤에만 검색·분석 경계로 이동합니다. 탐지 결과의 PDF 원문 조각은
+개인정보를 불투명 픽셀로 영구 치환한 PNG이며 텍스트 레이어를 포함하지 않습니다. 이미지 빌드 로그에는 설치된
 Tesseract 버전과 한국어 모델 SHA-256이 남습니다.
 
 Redis를 활성화한 환경에서는 `make run-worker`로 분석 ID만 전달하는 worker를 별도 실행합니다. 진행 상태는 Redis에 한 시간만 보관하며 원문이나 추출 텍스트는 큐에 넣지 않습니다.
