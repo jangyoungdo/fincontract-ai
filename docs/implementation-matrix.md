@@ -22,7 +22,7 @@
 | Data | Data Pipeline | implemented | source/text/corpus SHA-256 manifest + 공식 법령 7건 idempotent ingest verified | 수집 자동화·원문 변경 감지·나머지 4개 corpus 확대 필요 |
 | Data | Encrypted file storage | implemented | Fernet round-trip + plaintext absence verified | 운영 키 회전·외부 KMS 미구현 |
 | Data | Audit / retention | implemented | lifecycle audit + document TTL + 365-day audit expiry + token-protected query verified | 관리자 조회 UI 미구현 |
-| Infra | Docker Compose | implemented | pending | Docker·Colima 미설치 |
+| Infra | Docker Compose | implemented | 9-service contract, migration/corpus startup gates, sensitive-volume policy 3 tests verified | Docker·Colima 미설치로 clean build·restart E2E pending |
 
 ## 검증 단계
 
@@ -31,6 +31,6 @@
 3. `make api-check`: health, 업로드, 분석, 삭제 API
 4. `make frontend-check`: TypeScript, Vitest, production build
 5. `make e2e`: 샘플 API 업로드부터 결과 삭제까지 (브라우저 E2E는 별도 수동 검증)
-6. `docker compose up --build`: 컨테이너 전체 기동
+6. `make compose-check`: 컨테이너 build/up, init 로그, 인프라 read/write, API·프런트엔드 smoke
 
 각 단계의 실패는 다음 레이어를 완료 처리하지 않는 근거로 기록합니다.

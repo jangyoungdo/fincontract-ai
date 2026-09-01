@@ -149,6 +149,17 @@ Docker 런타임이 준비된 경우 다음 명령으로 PostgreSQL, Redis, Chro
 docker compose up --build
 ```
 
+첫 실행 전에 `.env.example`을 `.env`로 복사하고 `DOCUMENT_ENCRYPTION_KEY`를 실제 Fernet
+키로 교체해야 합니다. 키는 아래처럼 로컬에서 생성하되 출력값을 이슈·PR·로그에 남기지 않습니다.
+
+```bash
+backend/.venv/bin/python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+전체 Compose 계약과 인프라 read/write, API·프런트엔드 응답을 한 번에 검증하려면
+`make compose-check`를 실행합니다. 검증 후 컨테이너는 로그 확인을 위해 유지되며
+`make compose-logs`로 Backend·worker·retention 로그를 계속 볼 수 있습니다.
+
 Redis를 활성화한 환경에서는 `make run-worker`로 분석 ID만 전달하는 worker를 별도 실행합니다. 진행 상태는 Redis에 한 시간만 보관하며 원문이나 추출 텍스트는 큐에 넣지 않습니다.
 
 ## 주요 문서
