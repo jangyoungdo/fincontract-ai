@@ -11,6 +11,8 @@
   정적 계약 테스트 구현. Docker·Colima 부재로 clean build와 restart E2E는 미실행
 - P2 코드 완료/런타임 pending: 로컬 PDFium+Tesseract OCR, page/pixel/time/quality gate,
   암호화 PDF 차단, OCR 결과 PII masking 경계 테스트 구현. 실제 한국어 OCR E2E는 미실행
+- P3 안전 경계 완료/실제 호출 pending: outbound PII·schema·evidence·timeout·rate-limit,
+  단일 retry budget, 분석당 8-call 상한, non-content telemetry와 1-call 점검 명령 구현
 
 ## 목표
 

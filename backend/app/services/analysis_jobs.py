@@ -90,14 +90,15 @@ def process_analysis(analysis_id: str, redis_client: Redis | None = None) -> Non
             )
             if redis_client:
                 set_progress(redis_client, analysis_id, "completed", 100)
-        except Exception:
+        except Exception as exc:
             # Retrying reuses the persisted analysis ID. Once the configured limit
             # is reached, the job is isolated in the DLQ and requires human review.
             attempts = 1
             if redis_client:
                 attempts = int(redis_client.incr(attempt_key(analysis_id)))
                 redis_client.expire(attempt_key(analysis_id), PROGRESS_TTL_SECONDS)
-            if redis_client and attempts < get_settings().worker_max_attempts:
+            retryable = getattr(exc, "retryable", True)
+            if redis_client and retryable and attempts < get_settings().worker_max_attempts:
                 record.status = "queued"
                 record.error_code = "ANALYSIS_RETRYING"
                 redis_client.rpush(QUEUE_NAME, analysis_id)
@@ -106,7 +107,7 @@ def process_analysis(analysis_id: str, redis_client: Redis | None = None) -> Non
                 return
             record.status = "failed"
             record.disposition = "needs_review"
-            record.error_code = "ANALYSIS_FAILED"
+            record.error_code = getattr(exc, "code", "ANALYSIS_FAILED")
             add_audit_event(
                 session,
                 "analysis_failed",

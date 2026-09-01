@@ -47,6 +47,7 @@ class PrototypePipeline:
         text: str,
         experiment_arm: str = "D",
         retrieved_evidence: Optional[List[Dict[str, Any]]] = None,
+        max_provider_calls: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Run masking, rule screening, optional assessment, and citation verification."""
         if experiment_arm not in {"A", "D"}:
@@ -67,6 +68,16 @@ class PrototypePipeline:
 
         masked_text = masking.masked_text
         rule_matches = self.rules.screen(masked_text)
+        if (
+            experiment_arm == "D"
+            and max_provider_calls is not None
+            and len(rule_matches) > max_provider_calls
+        ):
+            return self._safe_failure(
+                analysis_id,
+                created_at,
+                "LLM_CALL_BUDGET_EXCEEDED",
+            )
         usage: List[Dict[str, Any]] = []
         findings = []
 
@@ -95,15 +106,25 @@ class PrototypePipeline:
                         estimated_input_tokens=max(1, len(masked_text) // 3),
                     )
                 )
-                assessment = self.provider.assess(signal, evidence, route.model)
-                usage.append(self._usage(route, index, max(1, len(masked_text) // 3)))
+                assessment = self.provider.assess(
+                    signal,
+                    evidence,
+                    route.model,
+                    max_tokens=route.max_output_tokens,
+                )
+                usage.append(
+                    self._usage(
+                        route,
+                        index,
+                        max(1, len(masked_text) // 3),
+                        self.provider.last_call_metadata(),
+                    )
+                )
                 verification = self._verify(
                     assessment,
                     evidence,
                     require_verified_evidence=True,
                 )
-                verifier_route = self.router.route(RoutingContext(role="verifier"))
-                usage.append(self._usage(verifier_route, index, max(1, len(str(assessment)) // 3)))
 
             findings.append(
                 {
@@ -201,9 +222,15 @@ class PrototypePipeline:
         return ",".join(versions) if versions else "not_available"
 
     @staticmethod
-    def _usage(route: Any, sequence: int, estimated_input_tokens: int) -> Dict[str, Any]:
+    def _usage(
+        route: Any,
+        sequence: int,
+        estimated_input_tokens: int,
+        provider_metadata: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
         data = asdict(route)
         data.update({"sequence": sequence, "estimated_input_tokens": estimated_input_tokens})
+        data.update(provider_metadata or {})
         return data
 
     @staticmethod

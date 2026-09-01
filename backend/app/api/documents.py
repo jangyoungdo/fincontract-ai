@@ -138,10 +138,10 @@ def create_analysis(document_id: str, request: AnalysisRequest, response: Respon
             add_audit_event(
                 session, "analysis_completed", document_id=document_id, analysis_id=analysis_id
             )
-        except Exception:
+        except Exception as exc:
             record.status = "failed"
             record.disposition = "needs_review"
-            record.error_code = "ANALYSIS_FAILED"
+            record.error_code = getattr(exc, "code", "ANALYSIS_FAILED")
             add_audit_event(
                 session, "analysis_failed", document_id=document_id, analysis_id=analysis_id
             )

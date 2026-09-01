@@ -20,6 +20,8 @@ class PrototypePipelineTest(unittest.TestCase):
         self.assertEqual("completed", result["status"])
         self.assertEqual("needs_review", result["disposition"])
         self.assertEqual("mock", result["experiment"]["provider"])
+        self.assertEqual("assessment-v1", result["usage"]["calls"][0]["prompt_version"])
+        self.assertTrue(result["usage"]["calls"][0]["synthetic"])
         self.assertEqual("failed", result["findings"][0]["verification"]["status"])
         self.assertEqual(
             "UNVERIFIED_EVIDENCE",
@@ -53,6 +55,16 @@ class PrototypePipelineTest(unittest.TestCase):
         )
         self.assertEqual([], result["usage"]["calls"])
         self.assertIsNone(result["findings"][0]["assessment"])
+
+    def test_arm_d_fails_closed_before_exceeding_provider_call_budget(self) -> None:
+        result = self.pipeline.analyze(
+            "은행은 필요하다고 인정하는 경우 서비스 내용을 일방적으로 변경할 수 있다.",
+            "D",
+            max_provider_calls=0,
+        )
+        self.assertEqual("failed", result["status"])
+        self.assertEqual("needs_review", result["disposition"])
+        self.assertEqual("LLM_CALL_BUDGET_EXCEEDED", result["failure"]["code"])
 
     def test_pii_is_not_present_in_result(self) -> None:
         email = "customer@example.com"

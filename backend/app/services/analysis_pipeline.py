@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from app.config import get_settings
 from app.prototype import PrototypePipeline
 from app.prototype.pii import mask_pii
 
@@ -15,6 +16,7 @@ class DocumentAnalysisPipeline:
 
     def run(self, text: str, experiment_arm: str) -> dict:
         """Analyze each clause and preserve the strictest downstream disposition."""
+        settings = get_settings()
         document_masking = mask_pii(text)
         if not document_masking.passed:
             return {
@@ -36,16 +38,18 @@ class DocumentAnalysisPipeline:
         # the same privacy-safe text returned by the source viewer.
         clauses = segment_clauses(document_masking.masked_text)
         results = []
+        remaining_provider_calls = settings.llm_max_calls_per_analysis
         for clause in clauses:
             # Retrieval happens before provider assessment and receives masked text only.
             evidence = self._retrieve_evidence(clause.text)
-            results.append(
-                self.prototype.analyze(
-                    clause.text,
-                    experiment_arm,
-                    retrieved_evidence=evidence,
-                )
+            result = self.prototype.analyze(
+                clause.text,
+                experiment_arm,
+                retrieved_evidence=evidence,
+                max_provider_calls=remaining_provider_calls,
             )
+            results.append(result)
+            remaining_provider_calls -= len(result.get("usage", {}).get("calls", []))
         findings = []
         warnings = set()
         usage_calls = []

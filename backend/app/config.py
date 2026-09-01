@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     anthropic_fast_model: str = ""
     anthropic_balanced_model: str = ""
     anthropic_deep_model: str = ""
+    anthropic_timeout_seconds: float = 20.0
+    anthropic_sdk_max_retries: int = 0
+    llm_max_calls_per_analysis: int = 8
     upload_dir: Path = Path("./storage/uploads")
     report_dir: Path = Path("./storage/reports")
     max_upload_bytes: int = 10_485_760
