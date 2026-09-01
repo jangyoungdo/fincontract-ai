@@ -23,6 +23,7 @@
 | Data | Encrypted file storage | implemented | Fernet round-trip + plaintext absence verified | 운영 키 회전·외부 KMS 미구현 |
 | Data | Audit / retention | implemented | lifecycle audit + document TTL + 365-day audit expiry + token-protected query verified | 관리자 조회 UI 미구현 |
 | Infra | Docker Compose | implemented | 9-service contract, migration/corpus startup gates, sensitive-volume policy 3 tests verified | Docker·Colima 미설치로 clean build·restart E2E pending |
+| Evaluation | 블라인드 전문가 평가 | partial | free-text/identity rejection, 2+ reviewer gate, Fleiss κ/disagreement synthetic fixture verified | 실제 비공개 평가셋·법률 검토자·합의판정 미확보 |
 
 ## 검증 단계
 

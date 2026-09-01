@@ -21,6 +21,7 @@ jobs:
           python -m json.tool research/demo_manifest.json >/dev/null
           python -m json.tool research/public_manifest_v0_1.json >/dev/null
           jq -e . backend/tests/fixtures/retrieval_eval_public_v0_1.jsonl >/dev/null
+          jq -e . backend/tests/fixtures/expert_annotations_synthetic_v0_1.jsonl >/dev/null
 
       - name: Backend tests
         run: |
@@ -42,11 +43,13 @@ jobs:
           bash -n scripts/new-worktree.sh
           bash -n scripts/check-compose.sh
           python -m py_compile backend/scripts/check_anthropic.py
+          python -m py_compile backend/scripts/evaluate_experts.py
           bash -n .githooks/pre-push
           test -x scripts/setup-dev.sh
           test -x scripts/new-worktree.sh
           test -x scripts/check-compose.sh
           test -x backend/scripts/check_anthropic.py
+          test -x backend/scripts/evaluate_experts.py
           test -x .githooks/pre-push
 
       - name: Run deterministic rule baseline tests

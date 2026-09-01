@@ -13,6 +13,8 @@
   암호화 PDF 차단, OCR 결과 PII masking 경계 테스트 구현. 실제 한국어 OCR E2E는 미실행
 - P3 안전 경계 완료/실제 호출 pending: outbound PII·schema·evidence·timeout·rate-limit,
   단일 retry budget, 분석당 8-call 상한, non-content telemetry와 1-call 점검 명령 구현
+- P5 평가 배선 완료/실제 평가 pending: 자유서술·신원 필드 차단 annotation 계약,
+  2인 이상 gate, Fleiss κ·불일치 보존 스크립트와 합성 fixture 구현
 
 ## 목표
 
