@@ -6,7 +6,7 @@
 
 동시에 이 저장소는 **현대자동차그룹 버티컬 AI 프레임을 참고해, 도메인 지식·도구·데이터·사람의 검토를 결합한 Agent AI가 실제 업무 품질과 효율을 개선하는지 검증하는 PoC**입니다. 공식 현대자동차그룹 서비스나 승인된 사내 프로젝트를 의미하지 않으며, 공개·허가·합성 데이터로 실험한 뒤 적용 가능성과 한계를 학습하는 것을 목표로 합니다.
 
-![FinContract AI 구현 상세 아키텍처](assets/fincontract-ai-architecture-v4.svg)
+![FinContract AI EC2 운영 실험 아키텍처](assets/fincontract-ai-architecture-v5.svg)
 
 ## 현재 상태
 
