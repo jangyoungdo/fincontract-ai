@@ -51,6 +51,9 @@ class Settings(BaseSettings):
     # Calibrated on the public synthetic dev set; 0.72 remains the calibration fallback.
     semantic_candidate_threshold: float = 0.90
     semantic_candidate_margin: float = 0.04
+    decision_rag_enabled: bool = True
+    decision_rag_min_score: float = 0.70
+    decision_rag_margin: float = 0.08
     upload_dir: Path = Path("./storage/uploads")
     report_dir: Path = Path("./storage/reports")
     max_upload_bytes: int = 10_485_760

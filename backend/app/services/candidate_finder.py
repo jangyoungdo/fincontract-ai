@@ -79,6 +79,7 @@ class CandidateFinder:
         self._prototypes: list[tuple[dict, str, str]] = []
         self._negative_prototypes: list[tuple[str, str]] = []
         taxonomy = json.loads(TAXONOMY_PATH.read_text(encoding="utf-8"))
+        self.taxonomy_version = str(taxonomy["version"])
         profiles = {item["rule_id"]: item for item in taxonomy["profiles"]}
         for rule in self.rules.ruleset["rules"]:
             prototypes = profiles.get(rule["id"], {}).get("positive_prototypes") or rule.get("candidate_terms", [])
@@ -96,6 +97,7 @@ class CandidateFinder:
             "model_id": getattr(self.encoder, "model_id", "injected-test-encoder"),
             "model_revision": getattr(self.encoder, "model_revision", "test"),
             "backend": getattr(self.encoder, "backend", "injected"),
+            "taxonomy_version": self.taxonomy_version,
             "threshold": self.threshold,
             "margin": self.margin,
         }

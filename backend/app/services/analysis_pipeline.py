@@ -9,11 +9,11 @@ from app.prototype.pii import mask_pii, mask_pii_pages
 
 from .candidate_finder import CandidateFinder
 from .clause_segmenter import segment_clauses
+from .decision_rag import DecisionRAGGate
 from .deterministic_summary import enrich_summaries
 from .openai_context_review import OpenAIContextReviewer
 from .openai_summary import OpenAIReviewSummarizer
 from .retrieval import HybridRetriever
-
 
 LOGGER = logging.getLogger(__name__)
 
@@ -25,6 +25,7 @@ class DocumentAnalysisPipeline:
         self.prototype = PrototypePipeline()
         self.retriever = HybridRetriever()
         self.candidates = CandidateFinder(self.prototype.rules)
+        self.decision_gate = DecisionRAGGate(rules=self.prototype.rules)
         self.context_reviewer = OpenAIContextReviewer(
             self.prototype.provider, self.prototype.rules
         )
@@ -256,6 +257,19 @@ class DocumentAnalysisPipeline:
             (time.perf_counter() - stage_started) * 1000,
             context_candidate_count,
         )
+
+        if evaluation_mode == "full" and candidate_findings:
+            candidate_findings, decision_counts = self.decision_gate.filter_candidates(
+                candidate_findings
+            )
+            LOGGER.info(
+                "analysis.pipeline.decision_rag_done supported=%s contested=%s "
+                "insufficient=%s visible_candidates=%s",
+                decision_counts["supported"],
+                decision_counts["contested"],
+                decision_counts["insufficient"],
+                len(candidate_findings),
+            )
 
         dispositions = {result.get("disposition") for result in results}
         if evaluation_mode == "full" and self.candidates.metadata["backend"] != "multilingual-e5":

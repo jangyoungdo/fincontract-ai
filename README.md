@@ -18,7 +18,7 @@
 
 - Next.js 업로드·분석 대시보드와 FastAPI 문서/분석/PDF 리포트 API 구현
 - PDF/DOCX/TXT 추출, PII 마스킹, 19개 규칙, 오프라인 다국어 E5 의미 후보, RAG 근거 검증 구현
-- PostgreSQL 메타데이터, Redis worker 재시도·격리, ChromaDB 5개 컬렉션 구현
+- PostgreSQL 메타데이터, Redis worker 재시도·격리, ChromaDB 5개 법률 컬렉션과 내부 판정 카드 RAG 구현
 - Fernet 원문 암호화, 문서 TTL, 감사 로그·만료와 관리자 보호 조회 구현
 - 결정론적 문서·항목 요약과 개인정보가 픽셀 단위로 제거된 PDF 원문 조각 구현
 - 공개 API와 화면에서 문서 전문을 제거하고 조각 소유권 검증·24시간 만료 삭제 구현
