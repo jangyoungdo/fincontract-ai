@@ -196,6 +196,9 @@ Docker 런타임이 준비된 경우 다음 명령으로 PostgreSQL, Redis, Chro
 docker compose up --build
 ```
 
+Ubuntu EC2 단일 서버의 Caddy 프록시, 포트 제한, HTTPS 전환과 운영 명령은
+[EC2 단일 서버 운영 배포](docs/ec2-production-deployment.md)를 따릅니다.
+
 첫 실행 전에 `.env.example`을 `.env`로 복사하고 `DOCUMENT_ENCRYPTION_KEY`를 실제 Fernet
 키로 교체해야 합니다. 키는 아래처럼 로컬에서 생성하되 출력값을 이슈·PR·로그에 남기지 않습니다.
 
