@@ -135,6 +135,26 @@ def test_context_review_never_duplicates_existing_section_category(
     assert "OPENAI_CONTEXT_OUTPUT_REJECTED" in warnings
 
 
+def test_context_review_uses_at_most_one_document_batch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPENAI_CONTEXT_REVIEW_ENABLED", "true")
+    monkeypatch.setenv("OPENAI_CONTEXT_MAX_CALLS", "3")
+    monkeypatch.setenv("OPENAI_CONTEXT_MAX_CHARS_PER_CALL", "20")
+    get_settings.cache_clear()
+    clauses = [
+        SimpleNamespace(section_id=f"article-{index}", label=f"제{index}조", text="가" * 15)
+        for index in range(1, 4)
+    ]
+    reviewer = OpenAIContextReviewer(Provider(), Rules())
+
+    batches, truncated = reviewer._batches(clauses)
+
+    assert len(batches) == 1
+    assert truncated is True
+    assert reviewer.version_metadata["max_calls"] == 1
+
+
 def test_pipeline_adds_context_candidate_without_promoting_rule_finding(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import logging
+import time
+
 from app.config import get_settings
 from app.prototype import PrototypePipeline
 from app.prototype.pii import mask_pii, mask_pii_pages
@@ -8,11 +11,16 @@ from .candidate_finder import CandidateFinder
 from .clause_segmenter import segment_clauses
 from .deterministic_summary import enrich_summaries
 from .openai_context_review import OpenAIContextReviewer
+from .openai_summary import OpenAIReviewSummarizer
 from .retrieval import HybridRetriever
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 class DocumentAnalysisPipeline:
     """Run one production pipeline; rules-only exists solely for offline evaluation."""
+
     def __init__(self) -> None:
         self.prototype = PrototypePipeline()
         self.retriever = HybridRetriever()
@@ -20,6 +28,7 @@ class DocumentAnalysisPipeline:
         self.context_reviewer = OpenAIContextReviewer(
             self.prototype.provider, self.prototype.rules
         )
+        self.review_summarizer = OpenAIReviewSummarizer(self.prototype.provider)
 
     def run(
         self,
@@ -31,16 +40,44 @@ class DocumentAnalysisPipeline:
         source_extension: str | None = None,
     ) -> dict:
         """Analyze a document. Legacy A/D input is accepted but does not select product behavior."""
+        overall_started = time.perf_counter()
         if evaluation_mode not in {"full", "rules_only"}:
             raise ValueError("evaluation_mode must be full or rules_only")
         settings = get_settings()
+
+        LOGGER.info(
+            "analysis.pipeline.start arm=%s mode=%s ext=%s has_pages=%s",
+            experiment_arm,
+            evaluation_mode,
+            source_extension,
+            bool(pages),
+        )
+
+        stage_started = time.perf_counter()
         if pages:
             document_masking, masked_pages = mask_pii_pages(pages)
         else:
             document_masking = mask_pii(text)
             masked_pages = (document_masking.masked_text,)
+        LOGGER.info(
+            "analysis.pipeline.masking_done elapsed_ms=%.2f passed=%s page_count=%s",
+            (time.perf_counter() - stage_started) * 1000,
+            document_masking.passed,
+            len(masked_pages),
+        )
+
+        stage_started = time.perf_counter()
         page_ranges = self._page_ranges(masked_pages)
+        LOGGER.info(
+            "analysis.pipeline.page_ranges_done elapsed_ms=%.2f",
+            (time.perf_counter() - stage_started) * 1000,
+        )
+
         if not document_masking.passed:
+            LOGGER.info(
+                "analysis.pipeline.failed_fast elapsed_ms=%.2f",
+                (time.perf_counter() - overall_started) * 1000,
+            )
             return {
                 "status": "completed",
                 "disposition": "needs_review",
@@ -59,30 +96,40 @@ class DocumentAnalysisPipeline:
 
         # Segment the already-masked document so all downstream offsets point to
         # the same privacy-safe text returned by the source viewer.
+        stage_started = time.perf_counter()
         sections = segment_clauses(document_masking.masked_text)
         clauses = [section for section in sections if section.analyzable]
-        results = []
-        context_call_reserve = (
-            min(settings.openai_context_max_calls, settings.llm_max_calls_per_analysis)
-            if evaluation_mode == "full" and self.context_reviewer.enabled
-            else 0
+        LOGGER.info(
+            "analysis.pipeline.segment_done total_sections=%s analyzable=%s elapsed_ms=%.2f",
+            len(sections),
+            len(clauses),
+            (time.perf_counter() - stage_started) * 1000,
         )
-        remaining_provider_calls = settings.llm_max_calls_per_analysis - context_call_reserve
+
+        results = []
+        stage_started = time.perf_counter()
         for clause in clauses:
-            # Retrieval happens before provider assessment and receives masked text only.
+            # The baseline scan stays deterministic. OpenAI is reserved for the
+            # single document-level context review after all rules have run.
             evidence = self._retrieve_evidence(clause.text)
             result = self.prototype.analyze(
                 clause.text,
-                "D" if evaluation_mode == "full" else "A",
+                "A",
                 retrieved_evidence=evidence,
-                max_provider_calls=remaining_provider_calls,
+                max_provider_calls=0,
             )
             results.append(result)
-            remaining_provider_calls -= len(result.get("usage", {}).get("calls", []))
+        LOGGER.info(
+            "analysis.pipeline.rules_scan_done clauses=%s elapsed_ms=%.2f",
+            len(clauses),
+            (time.perf_counter() - stage_started) * 1000,
+        )
+
         findings = []
         candidate_findings = []
         warnings = set()
         usage_calls = []
+        stage_started = time.perf_counter()
         for clause, result in zip(clauses, results):
             for finding in result.get("findings", []):
                 finding["finding_id"] = f"finding:{clause.section_id}:{finding['rule_signal']['rule_id']}"
@@ -111,9 +158,11 @@ class DocumentAnalysisPipeline:
                         absolute_match_end,
                         page_ranges,
                     )
+                    finding["source"]["_generate_pdf_preview"] = True
                 finding["source"]["preview_status"] = "text_only"
                 finding["source"]["preview_ids"] = []
                 findings.append(finding)
+
             if evaluation_mode == "full" and settings.semantic_model_enabled:
                 matched_categories = {
                     item["rule_signal"]["category"] for item in result.get("findings", [])
@@ -131,19 +180,6 @@ class DocumentAnalysisPipeline:
                                 "masked_text": evidence_text,
                                 "match_span": [0, len(evidence_text)],
                                 "page_number": self._page_for_offset(absolute_start, page_ranges),
-                                **(
-                                    {
-                                        "_preview_targets": self._preview_targets(
-                                            evidence_text,
-                                            absolute_start,
-                                            absolute_start,
-                                            absolute_start + len(evidence_text),
-                                            page_ranges,
-                                        )
-                                    }
-                                    if source_extension == ".pdf"
-                                    else {}
-                                ),
                                 "preview_status": "text_only",
                                 "preview_ids": [],
                             },
@@ -161,6 +197,15 @@ class DocumentAnalysisPipeline:
                     )
             warnings.update(result.get("warnings", []))
             usage_calls.extend(result.get("usage", {}).get("calls", []))
+        LOGGER.info(
+            "analysis.pipeline.findings_done findings=%s base_candidates=%s elapsed_ms=%.2f",
+            len(findings),
+            len(candidate_findings),
+            (time.perf_counter() - stage_started) * 1000,
+        )
+
+        stage_started = time.perf_counter()
+        context_candidate_count = 0
         if evaluation_mode == "full" and self.context_reviewer.enabled:
             excluded = {
                 (item["clause"]["section_id"], item["rule_signal"]["category"])
@@ -173,6 +218,7 @@ class DocumentAnalysisPipeline:
             context_candidates, context_usage, context_warnings = self.context_reviewer.review(
                 clauses, excluded
             )
+            context_candidate_count = len(context_candidates)
             clause_by_id = {clause.section_id: clause for clause in clauses}
             for candidate in context_candidates:
                 clause = clause_by_id[candidate.pop("section_id")]
@@ -187,19 +233,6 @@ class DocumentAnalysisPipeline:
                             "masked_text": evidence_text,
                             "match_span": [0, len(evidence_text)],
                             "page_number": self._page_for_offset(absolute_start, page_ranges),
-                            **(
-                                {
-                                    "_preview_targets": self._preview_targets(
-                                        evidence_text,
-                                        absolute_start,
-                                        absolute_start,
-                                        absolute_start + len(evidence_text),
-                                        page_ranges,
-                                    )
-                                }
-                                if source_extension == ".pdf"
-                                else {}
-                            ),
                             "preview_status": "text_only",
                             "preview_ids": [],
                         },
@@ -217,6 +250,13 @@ class DocumentAnalysisPipeline:
                 )
             usage_calls.extend(context_usage)
             warnings.update(context_warnings)
+        LOGGER.info(
+            "analysis.pipeline.context_review_done enabled=%s elapsed_ms=%.2f context_candidates=%s",
+            evaluation_mode == "full" and self.context_reviewer.enabled,
+            (time.perf_counter() - stage_started) * 1000,
+            context_candidate_count,
+        )
+
         dispositions = {result.get("disposition") for result in results}
         if evaluation_mode == "full" and self.candidates.metadata["backend"] != "multilingual-e5":
             warnings.add("SEMANTIC_MODEL_FALLBACK")
@@ -228,35 +268,58 @@ class DocumentAnalysisPipeline:
             disposition = "no_signal"
         else:
             disposition = "ready_for_review"
-        return enrich_summaries({
-            "status": "completed",
-            "disposition": disposition,
-            "clause_count": len(clauses),
-            "findings": findings,
-            "candidate_findings": candidate_findings,
-            "warnings": sorted(warnings),
-            "document": {
-                "pii_types": document_masking.detected_types,
-                "pii_replacement_count": document_masking.replacement_count,
-                "page_count": len(masked_pages),
-                "source_type": (source_extension or "").lstrip(".") or "text",
-            },
-            "usage": {"calls": usage_calls},
-            "experiment": {
-                "mode": evaluation_mode,
-                "legacy_arm_ignored": experiment_arm if experiment_arm in {"A", "D"} else None,
-                "provider": self.prototype.provider.name if evaluation_mode == "full" else "none",
-            },
-            "versions": {
-                "ruleset": self.prototype.rules.version,
-                "semantic": self.candidates.metadata if evaluation_mode == "full" else None,
-                "openai_context": (
-                    self.context_reviewer.version_metadata
-                    if evaluation_mode == "full"
-                    else None
-                ),
-            },
-        })
+
+        result = enrich_summaries(
+            {
+                "status": "completed",
+                "disposition": disposition,
+                "clause_count": len(clauses),
+                "findings": findings,
+                "candidate_findings": candidate_findings,
+                "warnings": sorted(warnings),
+                "document": {
+                    "pii_types": document_masking.detected_types,
+                    "pii_replacement_count": document_masking.replacement_count,
+                    "page_count": len(masked_pages),
+                    "source_type": (source_extension or "").lstrip(".") or "text",
+                },
+                "usage": {"calls": usage_calls},
+                "experiment": {
+                    "mode": evaluation_mode,
+                    "legacy_arm_ignored": experiment_arm if experiment_arm in {"A", "D"} else None,
+                    "provider": self.prototype.provider.name if evaluation_mode == "full" else "none",
+                },
+                "versions": {
+                    "ruleset": self.prototype.rules.version,
+                    "semantic": self.candidates.metadata if evaluation_mode == "full" else None,
+                    "openai_context": (
+                        self.context_reviewer.version_metadata
+                        if evaluation_mode == "full"
+                        else None
+                    ),
+                    "openai_summary": self.review_summarizer.version_metadata,
+                },
+            }
+        )
+
+        stage_started = time.perf_counter()
+        summary_usage, summary_warnings = self.review_summarizer.enrich(result)
+        result["usage"]["calls"].extend(summary_usage)
+        result["warnings"] = sorted({*result["warnings"], *summary_warnings})
+        LOGGER.info(
+            "analysis.pipeline.summary_done enabled=%s method=%s elapsed_ms=%.2f",
+            self.review_summarizer.enabled,
+            result.get("summary", {}).get("generation", {}).get("method"),
+            (time.perf_counter() - stage_started) * 1000,
+        )
+
+        LOGGER.info(
+            "analysis.pipeline.done elapsed_ms=%.2f findings=%s candidates=%s",
+            (time.perf_counter() - overall_started) * 1000,
+            len(result.get("findings", [])),
+            len(result.get("candidate_findings", [])),
+        )
+        return result
 
     @staticmethod
     def _page_ranges(pages: tuple[str, ...]) -> tuple[tuple[int, int, int], ...]:

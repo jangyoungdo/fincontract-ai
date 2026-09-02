@@ -140,5 +140,9 @@ def enrich_summaries(result: dict) -> dict:
     for candidate in candidates:
         candidate["summary_sentence"] = candidate_summary(candidate)
     result["summary"] = document_summary(findings, candidates)
+    result["summary"]["lines"] = [
+        result["summary"]["headline"],
+        "각 신호는 법률 결론이 아니므로 표시된 원문 조각과 적용 조건을 함께 확인해야 합니다.",
+    ]
     result["result_schema_version"] = "3.0"
     return result

@@ -124,7 +124,9 @@ def build_pdf_report(analysis_id: str, result: dict | None) -> bytes:
     ]
     summary = safe_result.get("summary", {})
     if summary.get("headline"):
-        story.extend([Paragraph("핵심 요약", heading), _paragraph(summary["headline"], quote)])
+        summary_lines = summary.get("lines") or [summary["headline"]]
+        story.extend([Paragraph("핵심 요약", heading)])
+        story.extend(_paragraph(line, quote) for line in summary_lines)
 
     if not findings:
         story.extend([

@@ -113,7 +113,17 @@ export type Analysis = {
     warnings: string[];
     clause_count: number;
     result_schema_version?: string;
-    summary?: { headline: string; top_categories: string[] };
+    summary?: {
+      headline: string;
+      lines?: string[];
+      top_categories: string[];
+      generation?: {
+        method: "openai" | "deterministic_fallback";
+        model?: string;
+        prompt_version?: string;
+        response_id?: string | null;
+      };
+    };
     versions?: { ruleset?: string; corpus?: string };
     document?: { pii_types: string[]; pii_replacement_count: number; page_count?: number; source_type?: string };
   };

@@ -6,6 +6,7 @@ import hashlib
 import logging
 import re
 import shutil
+import time
 from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
@@ -69,16 +70,22 @@ def _native_layout(
     text_page: Any, page_height: float
 ) -> tuple[str, Callable[[int, int], list[tuple[int, int, int, int]]]]:
     text = text_page.get_text_bounded()
+    character_rectangles: list[tuple[int, int, int, int] | None] = []
+    for index in range(text_page.count_chars()):
+        try:
+            character_rectangles.append(
+                _pdf_rect_to_pixels(text_page.get_charbox(index), page_height)
+            )
+        except Exception as exc:  # noqa: BLE001 - one malformed glyph must not expose PII
+            LOGGER.debug("PDF character box unavailable", exc_info=exc)
+            character_rectangles.append(None)
 
     def boxes(start: int, end: int) -> list[tuple[int, int, int, int]]:
-        rectangles = []
-        for index in range(max(0, start), min(end, text_page.count_chars())):
-            try:
-                rectangles.append(_pdf_rect_to_pixels(text_page.get_charbox(index), page_height))
-            except Exception as exc:  # noqa: BLE001 - one malformed glyph must not expose PII
-                LOGGER.debug("PDF character box unavailable", exc_info=exc)
-                continue
-        return rectangles
+        return [
+            rectangle
+            for rectangle in character_rectangles[max(0, start) : min(end, len(character_rectangles))]
+            if rectangle is not None
+        ]
 
     return text, boxes
 
@@ -184,9 +191,10 @@ def generate_pdf_source_previews(
     settings,
     pages: tuple[str, ...] | None = None,
 ) -> dict:
-    """Generate up to two sanitized page crops per item without changing detections."""
+    """Generate sanitized crops only for explicitly selected deterministic findings."""
     import pypdfium2 as pdfium
 
+    overall_started = time.perf_counter()
     target_dir = report_dir / "previews" / analysis_id
     shutil.rmtree(target_dir, ignore_errors=True)
     document = pdfium.PdfDocument(data)
@@ -195,42 +203,91 @@ def generate_pdf_source_previews(
     for page_text in pages or ():
         page_counters.append(dict(counters))
         find_pii_spans(page_text, counters)
+    generated_count = 0
+    attempted_count = 0
+    page_cache: dict[
+        int,
+        tuple[
+            Image.Image,
+            str,
+            Callable[[int, int], list[tuple[int, int, int, int]]],
+        ]
+        | None,
+    ] = {}
+    LOGGER.info(
+        "analysis.previews.start analysis_id=%s findings=%s candidates=%s pages=%s",
+        analysis_id,
+        len(result.get("findings", [])),
+        len(result.get("candidate_findings", [])),
+        len(document),
+    )
     try:
         for item in [*result.get("findings", []), *result.get("candidate_findings", [])]:
             source = item.setdefault("source", {})
             source["preview_status"] = "text_only"
             source["preview_ids"] = []
+            should_generate = bool(source.pop("_generate_pdf_preview", False))
             raw_targets = source.pop("_preview_targets", None)
+            if not should_generate:
+                continue
             targets = raw_targets if isinstance(raw_targets, list) and raw_targets else [
                 {"page_number": source.get("page_number"), "text": _target_text(item)}
             ]
             for target_index, target in enumerate(targets[:2]):
+                attempted_count += 1
+                preview_started = time.perf_counter()
                 page_number = target.get("page_number")
                 target_text = str(target.get("text", ""))
                 if not isinstance(page_number, int) or not 1 <= page_number <= len(document):
                     continue
-                page = document[page_number - 1]
-                text_page = None
-                bitmap = None
                 try:
-                    _, page_height = page.get_size()
-                    bitmap = page.render(scale=RENDER_SCALE)
-                    image = bitmap.to_pil().convert("RGB")
-                    text_page = page.get_textpage()
-                    layout_text, boxes = _native_layout(text_page, page_height)
-                    if not layout_text.strip():
-                        layout_text, boxes = _ocr_layout(image, settings)
+                    if page_number not in page_cache:
+                        page_started = time.perf_counter()
+                        page = document[page_number - 1]
+                        text_page = None
+                        bitmap = None
+                        try:
+                            _, page_height = page.get_size()
+                            bitmap = page.render(scale=RENDER_SCALE)
+                            base_image = bitmap.to_pil().convert("RGB")
+                            text_page = page.get_textpage()
+                            layout_text, boxes = _native_layout(text_page, page_height)
+                            if not layout_text.strip():
+                                layout_text, boxes = _ocr_layout(base_image, settings)
+                            starting_counts = (
+                                dict(page_counters[page_number - 1])
+                                if page_number <= len(page_counters)
+                                else None
+                            )
+                            if _draw_redactions(
+                                base_image, layout_text, boxes, starting_counts
+                            ):
+                                page_cache[page_number] = (base_image, layout_text, boxes)
+                            else:
+                                base_image.close()
+                                page_cache[page_number] = None
+                        finally:
+                            if text_page is not None:
+                                text_page.close()
+                            if bitmap is not None:
+                                bitmap.close()
+                            page.close()
+                        LOGGER.info(
+                            "analysis.previews.page_ready analysis_id=%s page=%s elapsed_ms=%.2f",
+                            analysis_id,
+                            page_number,
+                            (time.perf_counter() - page_started) * 1000,
+                        )
+                    cached_page = page_cache[page_number]
+                    if cached_page is None:
+                        continue
+                    base_image, layout_text, boxes = cached_page
                     located = _locate(layout_text, target_text)
                     if located is None:
                         continue
-                    starting_counts = (
-                        dict(page_counters[page_number - 1])
-                        if page_number <= len(page_counters)
-                        else None
-                    )
-                    if not _draw_redactions(image, layout_text, boxes, starting_counts):
-                        continue
+                    image = base_image.copy()
                     cropped = _crop_and_highlight(image, boxes(*located))
+                    image.close()
                     if cropped is None:
                         continue
                     item_id = str(item.get("finding_id") or item.get("candidate_id") or "source")
@@ -242,23 +299,35 @@ def generate_pdf_source_previews(
                         format="PNG",
                         optimize=True,
                     )
+                    cropped.close()
                     source["preview_ids"].append(preview_id)
+                    generated_count += 1
+                    LOGGER.info(
+                        "analysis.previews.item_done analysis_id=%s page=%s elapsed_ms=%.2f",
+                        analysis_id,
+                        page_number,
+                        (time.perf_counter() - preview_started) * 1000,
+                    )
                 except Exception as exc:  # noqa: BLE001 - preview failure falls back to masked text
                     LOGGER.warning(
                         "Source preview generation fell back to masked text",
                         extra={"analysis_id": analysis_id, "page_number": page_number},
                         exc_info=exc,
                     )
-                finally:
-                    if text_page is not None:
-                        text_page.close()
-                    if bitmap is not None:
-                        bitmap.close()
-                    page.close()
             if source["preview_ids"]:
                 source["preview_status"] = "available"
     finally:
+        for cached in page_cache.values():
+            if cached is not None:
+                cached[0].close()
         document.close()
+    LOGGER.info(
+        "analysis.previews.done analysis_id=%s attempted=%s generated=%s elapsed_ms=%.2f",
+        analysis_id,
+        attempted_count,
+        generated_count,
+        (time.perf_counter() - overall_started) * 1000,
+    )
     return result
 
 

@@ -108,6 +108,13 @@ def test_public_result_strips_legacy_full_text_and_preview_is_owned_and_deleted(
     now = datetime.now(timezone.utc)
     result = {
         "document": {"masked_text": "[NAME_1]의 문서 전문", "pii_replacement_count": 1},
+        "warnings": [
+            "LLM_SCHEMA_INVALID",
+            "OPENAI_CONTEXT_REVIEW_FAILED",
+            "mock 에이전트 결과는 실제 LLM 품질 평가에 사용할 수 없습니다.",
+            "법적 근거는 검증 전 후보이며 원문·시행일 확인이 필요합니다.",
+            "이 결과는 법률 판단이 아닌 검토 보조 자료입니다.",
+        ],
         "findings": [
             {
                 "source": {
@@ -158,6 +165,7 @@ def test_public_result_strips_legacy_full_text_and_preview_is_owned_and_deleted(
         )
 
     assert "masked_text" not in public_result.json()["result"]["document"]
+    assert public_result.json()["result"]["warnings"] == ["OPENAI_CONTEXT_REVIEW_FAILED"]
     assert preview.status_code == 200
     assert preview.headers["content-type"] == "image/png"
     assert preview.headers["cache-control"] == "no-store"

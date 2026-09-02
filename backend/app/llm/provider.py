@@ -14,6 +14,7 @@ from app.config import get_settings
 
 PROMPT_VERSION = "assessment-v1"
 CONTEXT_REVIEW_PROMPT_VERSION = "context-review-v1"
+REVIEW_SUMMARY_PROMPT_VERSION = "review-summary-v1"
 
 
 class ProviderError(RuntimeError):
@@ -64,11 +65,11 @@ class ContextCandidateOutput(BaseModel):
 
     section_id: str = Field(min_length=1, max_length=200)
     rule_id: str = Field(min_length=1, max_length=100)
-    evidence_quote: str = Field(min_length=1, max_length=2000)
-    rationale: str = Field(min_length=1, max_length=1200)
-    review_question: str = Field(min_length=1, max_length=500)
+    evidence_quote: str = Field(min_length=1, max_length=600)
+    rationale: str = Field(min_length=1, max_length=500)
+    review_question: str = Field(min_length=1, max_length=240)
     confidence: Literal["low", "medium", "high"]
-    counter_considerations: list[str] = Field(max_length=5)
+    counter_considerations: list[str] = Field(max_length=3)
 
 
 class ContextReviewOutput(BaseModel):
@@ -76,7 +77,15 @@ class ContextReviewOutput(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    candidates: list[ContextCandidateOutput] = Field(max_length=40)
+    candidates: list[ContextCandidateOutput] = Field(max_length=12)
+
+
+class ReviewSummaryOutput(BaseModel):
+    """One concise user-facing summary derived only from masked review results."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    lines: list[str] = Field(min_length=2, max_length=3)
 
 
 class FakeProvider:
@@ -245,7 +254,7 @@ class OpenAIProvider:
         sections: list[dict[str, str]],
         taxonomy: list[dict[str, Any]],
         model: str,
-        max_tokens: int = 2200,
+        max_tokens: int = 3200,
     ) -> dict[str, Any]:
         """Find review candidates in masked analyzable clauses without promoting findings."""
         prompt = {
@@ -253,6 +262,7 @@ class OpenAIProvider:
                 "각 조문의 전체 문맥을 검토하여 taxonomy에 해당할 가능성이 있는 항목만 반환하세요. "
                 "evidence_quote는 입력 조문에서 글자 하나도 바꾸지 않은 연속 문자열이어야 합니다. "
                 "명시된 section_id와 rule_id만 사용하고 정상 조항은 반환하지 마세요. "
+                "조문별 최대 2개, 문서 전체 최대 10개만 반환하고 설명은 간결하게 작성하세요. "
                 "위법·적법·무효를 확정하지 마세요."
             ),
             "prompt_version": CONTEXT_REVIEW_PROMPT_VERSION,
@@ -273,6 +283,41 @@ class OpenAIProvider:
         )
         try:
             return ContextReviewOutput.model_validate_json(text).model_dump()
+        except (TypeError, ValueError, ValidationError) as exc:
+            raise ProviderError("LLM_SCHEMA_INVALID", retryable=False) from exc
+
+    def summarize_review(
+        self,
+        review_snapshot: dict[str, Any],
+        model: str,
+        max_tokens: int = 320,
+    ) -> dict[str, Any]:
+        """Summarize masked rule and candidate metadata without receiving document bytes."""
+        prompt = {
+            "task": (
+                "사용자가 가장 먼저 읽을 핵심 요약을 서로 독립적인 한국어 문장 2~3개로 작성하세요. "
+                "첫 문장은 전체 탐지 결과, 둘째 문장은 우선 확인할 유형이나 조항, "
+                "필요한 경우 셋째 문장은 검토 시 주의사항을 설명하세요. "
+                "각 문장은 100자 이내로 쓰고 규칙 위험 신호와 추가 검토 후보를 구분하세요. "
+                "입력에 없는 사실을 만들거나 위법·적법·무효·불공정을 확정하지 마세요."
+            ),
+            "prompt_version": REVIEW_SUMMARY_PROMPT_VERSION,
+            "review_snapshot": review_snapshot,
+        }
+        text = self._request_structured(
+            prompt,
+            schema=ReviewSummaryOutput.model_json_schema(),
+            schema_name="fincontract_review_summary",
+            model=model,
+            max_tokens=max_tokens,
+            prompt_version=REVIEW_SUMMARY_PROMPT_VERSION,
+            instructions=(
+                "You write a concise Korean contract-review summary from masked structured results. "
+                "Return only schema-valid JSON and never make a final legal conclusion."
+            ),
+        )
+        try:
+            return ReviewSummaryOutput.model_validate_json(text).model_dump()
         except (TypeError, ValueError, ValidationError) as exc:
             raise ProviderError("LLM_SCHEMA_INVALID", retryable=False) from exc
 

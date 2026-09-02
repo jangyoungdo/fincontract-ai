@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections import defaultdict
 from typing import Any
 
@@ -9,6 +10,7 @@ from app.config import get_settings
 from app.llm.provider import CONTEXT_REVIEW_PROMPT_VERSION, ProviderError
 
 FORBIDDEN_CONCLUSIONS = ("위법하다", "적법하다", "무효이다", "반드시 승소")
+LOGGER = logging.getLogger(__name__)
 
 
 class OpenAIContextReviewer:
@@ -36,7 +38,7 @@ class OpenAIContextReviewer:
             "provider": "openai",
             "model": self.settings.openai_balanced_model,
             "prompt_version": CONTEXT_REVIEW_PROMPT_VERSION,
-            "max_calls": self.settings.openai_context_max_calls,
+            "max_calls": min(1, max(0, self.settings.openai_context_max_calls)),
             "max_chars_per_call": self.settings.openai_context_max_chars_per_call,
         }
 
@@ -66,10 +68,14 @@ class OpenAIContextReviewer:
                     sections,
                     self._taxonomy(),
                     self.settings.openai_balanced_model,
-                    max_tokens=2200,
+                    max_tokens=3200,
                 )
             except ProviderError as exc:
-                warnings.add(exc.code)
+                LOGGER.warning(
+                    "OpenAI context review rejected provider output code=%s sequence=%s",
+                    exc.code,
+                    sequence,
+                )
                 warnings.add("OPENAI_CONTEXT_REVIEW_FAILED")
                 continue
             metadata = self.provider.last_call_metadata()
@@ -128,7 +134,10 @@ class OpenAIContextReviewer:
 
     def _batches(self, clauses: list[Any]) -> tuple[list[list[Any]], bool]:
         limit = max(1, self.settings.openai_context_max_chars_per_call)
-        call_limit = max(0, self.settings.openai_context_max_calls)
+        # Product analyses use one document-level OpenAI request at most. If the
+        # configured character budget cannot cover every clause, the remainder is
+        # reported as truncated instead of triggering more sequential requests.
+        call_limit = min(1, max(0, self.settings.openai_context_max_calls))
         batches: list[list[Any]] = []
         current: list[Any] = []
         current_chars = 0
