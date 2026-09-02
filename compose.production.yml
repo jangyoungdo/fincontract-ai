@@ -1,0 +1,36 @@
+services:
+  chroma:
+    ports: !override
+      - "127.0.0.1:8001:8000"
+
+  backend:
+    environment:
+      APP_ENV: production
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:?set FRONTEND_ORIGIN}
+    ports: !override
+      - "127.0.0.1:8000:8000"
+
+  frontend:
+    ports: !override
+      - "127.0.0.1:3000:3000"
+
+  gateway:
+    image: caddy:2.10-alpine
+    environment:
+      FINCONTRACT_SITE_ADDRESS: ${FINCONTRACT_SITE_ADDRESS:?set FINCONTRACT_SITE_ADDRESS}
+    depends_on:
+      frontend:
+        condition: service_started
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: unless-stopped
+
+volumes:
+  caddy-data:
+  caddy-config:
