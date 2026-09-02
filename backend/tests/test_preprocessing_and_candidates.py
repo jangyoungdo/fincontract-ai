@@ -54,6 +54,29 @@ def test_candidate_finder_returns_a_separate_taxonomy_candidate() -> None:
     assert candidates[0]["model_id"] == "test-e5"
 
 
+def test_r11_semantic_taxonomy_covers_behavior_silence_and_assignment() -> None:
+    class R11Encoder:
+        model_id = "test-e5"
+        model_revision = "test-revision"
+        backend = "injected"
+
+        def __call__(self, texts: list[str]):
+            markers = ("계속 상품", "정해진 시간", "지위가 이전", "48시간", "계속 거래", "계속 사용")
+            return [[1.0, 0.0] if any(item in text for item in markers) else [0.0, 1.0] for text in texts]
+
+    finder = CandidateFinder(encoder=R11Encoder())
+    finder.threshold = 0.7
+    finder.margin = 0.04
+    samples = (
+        "고객이 계속 사용하면 새 조건을 받아들인 것으로 처리한다.",
+        "고객이 48시간 동안 응답하지 않으면 변경 조건을 수용한 것으로 확정한다.",
+        "지위가 이전된 뒤 계속 거래하면 새 상대방을 승인한 것으로 처리한다.",
+    )
+    for text in samples:
+        candidates = finder.suggest(text)
+        assert candidates[0]["category"] == "deemed_consent"
+
+
 def test_pipeline_returns_candidates_separately_and_requires_review(monkeypatch) -> None:
     pipeline = DocumentAnalysisPipeline()
     monkeypatch.setattr(pipeline, "_retrieve_evidence", lambda _: [])
@@ -67,6 +90,38 @@ def test_pipeline_returns_candidates_separately_and_requires_review(monkeypatch)
     assert result["findings"] == []
     assert result["candidate_findings"][0]["category"] == "retroactive_disadvantage"
     assert result["disposition"] == "needs_review"
+
+
+def test_pipeline_hides_a_candidate_rejected_by_private_rag_without_new_public_fields(
+    monkeypatch,
+) -> None:
+    pipeline = DocumentAnalysisPipeline()
+    monkeypatch.setattr(pipeline, "_retrieve_evidence", lambda _: [])
+    monkeypatch.setattr(
+        pipeline.candidates,
+        "suggest",
+        lambda text, excluded: [{
+            "candidate_id": "candidate:R04_UNILATERAL_CHANGE",
+            "category": "unilateral_change",
+            "name": "일방 변경",
+            "status": "semantic_review_candidate",
+            "confidence": "medium",
+            "similarity_score": 0.8,
+            "model_id": "test-e5",
+            "model_revision": "test",
+            "matched_prototype_ids": ["R04:p1"],
+            "review_questions": ["거절권이 있는지"],
+        }],
+    )
+    monkeypatch.setattr(
+        pipeline.decision_gate,
+        "filter_candidates",
+        lambda candidates: ([], {"supported": 0, "contested": 1, "insufficient": 0}),
+    )
+    result = pipeline.run("제1조 정상적인 변경 절차를 정한다.")
+    assert result["candidate_findings"] == []
+    assert result["result_schema_version"] == "3.0"
+    assert "decision_rag" not in result
 
 
 def test_preamble_is_not_analyzed_and_appendices_are_independent_sections() -> None:

@@ -97,6 +97,23 @@ class RuleEngineTest(unittest.TestCase):
         actual = {match.rule_id for match in self.engine.screen(text)}
         self.assertNotIn("R09_EXCESSIVE_FEES_OR_RATE", actual)
 
+    def test_prospective_change_with_notice_and_exit_right_suppresses_r04(self) -> None:
+        text = (
+            "은행은 수수료 조건을 변경할 수 있다. 다만 금전 부담이 늘어나는 경우 "
+            "30일 전 고객에게 개별 통지하고, 고객은 변경을 거절하여 계약을 종료할 수 있으며 "
+            "변경 내용은 변경일 이후 거래에만 적용한다."
+        )
+        actual = {match.rule_id for match in self.engine.screen(text)}
+        self.assertNotIn("R04_UNILATERAL_CHANGE", actual)
+
+    def test_partial_safe_conditions_do_not_hide_a_unilateral_change(self) -> None:
+        text = (
+            "은행은 수수료 조건을 변경할 수 있다. 변경 내용은 30일 전 개별 통지하지만 "
+            "고객은 변경을 거절하거나 계약을 종료할 수 없다. 변경일 이후 거래에 적용한다."
+        )
+        actual = {match.rule_id for match in self.engine.screen(text)}
+        self.assertIn("R04_UNILATERAL_CHANGE", actual)
+
 
 if __name__ == "__main__":
     unittest.main()

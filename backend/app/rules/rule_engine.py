@@ -75,6 +75,10 @@ class RuleEngine:
             positive = next(match for match in group_matches if match is not None)
             if self._has_local_suppression(rule.get("negative_patterns", []), normalized, positive):
                 continue
+            if self._has_local_group_suppression(
+                rule.get("negative_pattern_groups", []), normalized, positive
+            ):
+                continue
 
             context_count = sum(term in normalized for term in rule["context_terms"])
             strength = "medium" if context_count >= 2 else "low"
@@ -123,3 +127,20 @@ class RuleEngine:
         start = max(0, anchor.start() - window)
         end = min(len(text), anchor.end() + window)
         return cls._matches_any(patterns, text[start:end])
+
+    @classmethod
+    def _has_local_group_suppression(
+        cls,
+        pattern_groups: Iterable[Iterable[str]],
+        text: str,
+        anchor: re.Match[str],
+        window: int = 220,
+    ) -> bool:
+        """Suppress only when every safe-condition group occurs near the risk anchor."""
+        groups = list(pattern_groups)
+        if not groups:
+            return False
+        start = max(0, anchor.start() - window)
+        end = min(len(text), anchor.end() + window)
+        local_context = text[start:end]
+        return all(cls._matches_any(group, local_context) for group in groups)

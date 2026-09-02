@@ -1,0 +1,94 @@
+{
+  "version": "decision-cards-v0.1.0",
+  "cards": [
+    {
+      "card_id": "R04:risk:unilateral-economic-change",
+      "rule_id": "R04_UNILATERAL_CHANGE",
+      "polarity": "risk_pattern",
+      "title": "고객 선택권 없는 중요 조건 변경",
+      "source_class": "synthetic_development_pattern",
+      "review_status": "synthetic_verified",
+      "evaluation_split": "development",
+      "factor_groups": [
+        {"code": "business_controls_change", "patterns": ["은행|회사|사업자|채권자|금융사", "일방|임의|내부.*판단"]},
+        {"code": "important_term_changes", "patterns": ["조건|금리|수수료|한도|상환|서비스", "변경|조정|상향|재설계"]},
+        {"code": "choice_absent", "patterns": ["동의 없이|승낙 없이|거절.*수 없|종료.*수 없|선택권.*없"]}
+      ],
+      "text": "사업자가 고객의 동의나 실질적인 거절 선택권 없이 금리, 수수료 또는 계약의 중요 조건을 변경하는 구조는 일방적 변경 위험을 검토해야 한다."
+    },
+    {
+      "card_id": "R04:safe:notice-exit-prospective",
+      "rule_id": "R04_UNILATERAL_CHANGE",
+      "polarity": "safe_exception",
+      "title": "사전 통지와 종료권이 보장된 장래 변경",
+      "source_class": "synthetic_development_pattern",
+      "review_status": "synthetic_verified",
+      "evaluation_split": "development",
+      "factor_groups": [
+        {"code": "advance_individual_notice", "patterns": ["[0-9]{1,3}일.{0,20}전.{0,30}(개별|서면|전자문서).{0,20}통지", "사전.{0,30}(개별|서면|전자문서).{0,20}통지"]},
+        {"code": "meaningful_rejection_or_exit", "patterns": ["(변경|조건).{0,30}(거절|동의하지 않).{0,40}(해지|종료).{0,15}(할 수 있|가능)", "고객.{0,30}(거절|동의하지 않).{0,40}(해지|종료).{0,15}(할 수 있|가능)"]},
+        {"code": "prospective_effect", "patterns": ["변경일 이후", "효력발생일 이후", "장래에 한하여", "변경 이후.{0,20}(적용|거래)"]}
+      ],
+      "text": "불리한 변경을 사전에 고객에게 개별 통지하고 고객이 변경을 거절해 계약을 종료할 수 있으며 변경이 장래에만 적용되는 절차는 정상 예외를 검토해야 한다."
+    },
+    {
+      "card_id": "R11:risk:continued-use-consent",
+      "rule_id": "R11_DEEMED_CONSENT",
+      "polarity": "risk_pattern",
+      "title": "계속 이용 또는 보유를 동의로 간주",
+      "source_class": "synthetic_development_pattern",
+      "review_status": "synthetic_verified",
+      "evaluation_split": "development",
+      "factor_groups": [
+        {"code": "continued_behavior", "patterns": ["계속.{0,20}(이용|사용|보유)", "이용을 계속|사용을 계속|보유를 계속"]},
+        {"code": "behavior_as_consent", "patterns": ["동의|승인|수용|승낙", "의사.*표시|받아들인 것으로"]},
+        {"code": "changed_terms", "patterns": ["새.{0,10}조건|변경.{0,10}조건|재설계|불이익|경제조건"]}
+      ],
+      "text": "고객이 상품을 계속 사용하거나 보유하는 행동만으로 변경된 조건에 동의한 것으로 처리하는 구조는 묵시적 동의 위험을 검토해야 한다."
+    },
+    {
+      "card_id": "R11:risk:silence-consent",
+      "rule_id": "R11_DEEMED_CONSENT",
+      "polarity": "risk_pattern",
+      "title": "정해진 시간의 무응답을 수용으로 확정",
+      "source_class": "synthetic_development_pattern",
+      "review_status": "synthetic_verified",
+      "evaluation_split": "development",
+      "factor_groups": [
+        {"code": "bounded_silence", "patterns": ["[0-9]{1,3}(시간|일).{0,30}(응답하지 않|무응답|이의.*없)", "기간.{0,20}(응답하지 않|무응답|이의.*없)"]},
+        {"code": "silence_as_consent", "patterns": ["동의|승인|수용|승낙|확정"]},
+        {"code": "choice_absent", "patterns": ["응답하지 않|무응답|이의.*없|침묵"]}
+      ],
+      "text": "고객이 짧게 정해진 시간 동안 응답하지 않았다는 이유만으로 변경이나 정산을 수용한 것으로 확정하는 구조는 동의 간주 위험을 검토해야 한다."
+    },
+    {
+      "card_id": "R11:risk:continued-transaction-assignment",
+      "rule_id": "R11_DEEMED_CONSENT",
+      "polarity": "risk_pattern",
+      "title": "계속 거래를 계약상 지위 이전 승인으로 간주",
+      "source_class": "synthetic_development_pattern",
+      "review_status": "synthetic_verified",
+      "evaluation_split": "development",
+      "factor_groups": [
+        {"code": "continued_transaction", "patterns": ["계속.{0,20}거래", "거래를 계속"]},
+        {"code": "assignment_context", "patterns": ["지위.{0,20}이전|채권.{0,20}(양도|이전)|새.{0,10}상대방"]},
+        {"code": "transaction_as_approval", "patterns": ["동의|승인|수용|승낙|받아들인 것으로"]}
+      ],
+      "text": "계약상 지위나 채권이 이전된 뒤 고객이 거래를 계속했다는 사정만으로 새 상대방을 승인한 것으로 처리하는 구조는 동의 간주 위험을 검토해야 한다."
+    },
+    {
+      "card_id": "R11:safe:explicit-opt-in",
+      "rule_id": "R11_DEEMED_CONSENT",
+      "polarity": "safe_exception",
+      "title": "중요 변경에 대한 명시적 동의",
+      "source_class": "synthetic_development_pattern",
+      "review_status": "synthetic_verified",
+      "evaluation_split": "development",
+      "factor_groups": [
+        {"code": "explicit_opt_in", "patterns": ["명시적.{0,20}동의", "서면.{0,20}동의", "전자서명.{0,20}동의"]},
+        {"code": "no_silence_substitution", "patterns": ["무응답.{0,20}동의로.{0,10}보지 않", "침묵.{0,20}동의로.{0,10}보지 않", "별도.{0,20}동의"]}
+      ],
+      "text": "중요한 조건 변경은 고객의 별도 명시적 동의를 받고 침묵이나 계속 이용을 동의로 대체하지 않는 절차가 필요하다."
+    }
+  ]
+}
