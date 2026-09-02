@@ -87,8 +87,82 @@ describe("AnalysisWorkspace", () => {
 
   it("does not invent a bank comparison when no verified dataset exists", () => {
     render(<AnalysisWorkspace />);
-    expect(screen.getAllByText("은행 비교").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("타은행 비교").length).toBeGreaterThan(0);
     expect(screen.getAllByText(/순위나 추천은 표시하지 않습니다/).length).toBeGreaterThan(0);
+  });
+
+  it("lets the user tag bank name and product type on upload", async () => {
+    const fetchMock = mockUploadResult();
+    vi.stubGlobal("fetch", fetchMock);
+    render(<AnalysisWorkspace />);
+    fireEvent.change(screen.getByLabelText("계약서 파일"), {
+      target: { files: [new File(["synthetic"], "terms.txt", { type: "text/plain" })] },
+    });
+    fireEvent.change(screen.getByLabelText("은행명"), { target: { value: "우리은행" } });
+    fireEvent.change(screen.getByLabelText("상품유형"), { target: { value: "loan" } });
+    fireEvent.click(screen.getByRole("button", { name: "분석 시작" }));
+    await screen.findByRole("button", { name: "PDF 리포트" });
+
+    const body = fetchMock.mock.calls[0][1].body as FormData;
+    expect(body.get("bank_name")).toBe("우리은행");
+    expect(body.get("product_type")).toBe("loan");
+  });
+
+  it("shows pros and cons after requesting a ready bank comparison", async () => {
+    const fetchMock = mockUploadResult();
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        comparison_status: "ready",
+        product_type: "loan",
+        bank_name: "우리은행",
+        peer_bank_count: 3,
+        corpus_version: "bank-products-v0.1.0",
+        generated_note: "규칙 기반 정성 비교이며 법률 자문이 아닙니다.",
+        pros: [{
+          rule_id: "R04_UNILATERAL_CHANGE",
+          rule_name: "사업자의 일방적 계약내용 변경",
+          our_signal: false,
+          peer_match_rate: 0.6667,
+          peer_bank_count: 3,
+          explanation: "동종 은행 다수에 있는 조항이 본 상품에는 없습니다.",
+        }],
+        cons: [{
+          rule_id: "R08_EXCLUSIVE_JURISDICTION",
+          rule_name: "고객에게 불리한 전속적 재판관할",
+          our_signal: true,
+          peer_match_rate: 0.3333,
+          peer_bank_count: 3,
+          explanation: "동종 은행 대비 드문 조항이 본 상품에는 있습니다.",
+        }],
+        neutral: [],
+      }),
+    });
+    await upload(fetchMock);
+    fireEvent.click(screen.getByRole("button", { name: "타은행과 비교하기" }));
+    expect(await screen.findByText("사업자의 일방적 계약내용 변경", { selector: "b" })).toBeInTheDocument();
+    expect(screen.getByText("고객에게 불리한 전속적 재판관할", { selector: "b" })).toBeInTheDocument();
+  });
+
+  it("shows an insufficient-peer-data message instead of fabricating a comparison", async () => {
+    const fetchMock = mockUploadResult();
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        comparison_status: "insufficient_peer_data",
+        product_type: "loan",
+        bank_name: "우리은행",
+        peer_bank_count: 1,
+        corpus_version: "not_available",
+        generated_note: "동종 상품을 등록한 은행이 아직 충분하지 않아 비교를 제공하지 않습니다.",
+        pros: [],
+        cons: [],
+        neutral: [],
+      }),
+    });
+    await upload(fetchMock);
+    fireEvent.click(screen.getByRole("button", { name: "타은행과 비교하기" }));
+    expect(await screen.findByText(/아직 충분하지 않아/)).toBeInTheDocument();
   });
 
   it("renders the exact match, explanation, revision, evidence, and verification detail", async () => {

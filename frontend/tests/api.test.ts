@@ -1,5 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ClientApiError, deleteDocument, downloadReport, reportPdfUrl, uploadAndAnalyze, waitForAnalysis } from "@/lib/api";
+import {
+  ClientApiError,
+  deleteDocument,
+  downloadReport,
+  getBankComparison,
+  getDocument,
+  reportPdfUrl,
+  uploadAndAnalyze,
+  waitForAnalysis,
+} from "@/lib/api";
 
 describe("same-origin API client", () => {
   afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
@@ -61,6 +70,43 @@ describe("same-origin API client", () => {
     const result = await waitForAnalysis(initial, { maxAttempts: 4, pollIntervalMs: 0 });
     expect(result.status).toBe("completed");
     expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("sends bank name and product type as form fields when provided", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ id: "document-1" }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ id: "analysis-1", document_id: "document-1", status: "queued", disposition: "pending", experiment_arm: "A" }) });
+    vi.stubGlobal("fetch", fetchMock);
+    await uploadAndAnalyze(new File(["x"], "terms.txt"), "A", "우리은행", "loan");
+    const body = fetchMock.mock.calls[0][1].body as FormData;
+    expect(body.get("bank_name")).toBe("우리은행");
+    expect(body.get("product_type")).toBe("loan");
+  });
+
+  it("uses relative URLs for document metadata and bank comparison lookups", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ id: "document-1", bank_name: "우리은행", product_type: "loan" }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ comparison_status: "ready", pros: [], cons: [], neutral: [] }) });
+    vi.stubGlobal("fetch", fetchMock);
+    await getDocument("document-1");
+    await getBankComparison("analysis-1");
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/documents/document-1");
+    expect(fetchMock.mock.calls[1][0]).toBe("/api/v1/analyses/analysis-1/bank-comparison");
+  });
+
+  it("maps the not-tagged comparison error to stable Korean guidance", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: false,
+      status: 422,
+      json: async () => ({ detail: "COMPARISON_DOCUMENT_NOT_TAGGED: 은행명과 상품유형을 입력한 문서만 타은행과 비교할 수 있습니다." }),
+    }));
+    await expect(getBankComparison("analysis-1")).rejects.toMatchObject({
+      name: "ClientApiError",
+      stage: "compare",
+      code: "COMPARISON_DOCUMENT_NOT_TAGGED",
+      retryable: false,
+      message: "은행명과 상품유형을 입력한 문서만 타은행과 비교할 수 있습니다.",
+    });
   });
 
   it("preserves the analysis ID when the polling budget is exhausted", async () => {

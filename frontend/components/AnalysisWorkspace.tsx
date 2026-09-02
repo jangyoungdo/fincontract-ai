@@ -3,11 +3,14 @@
 import { FormEvent, ReactNode, useState } from "react";
 import {
   Analysis,
+  BankComparison,
   ClientApiError,
   Finding,
+  PRODUCT_TYPES,
   deleteDocument,
   downloadReport,
   getAnalysis,
+  getBankComparison,
   uploadAndAnalyze,
   waitForAnalysis,
 } from "@/lib/api";
@@ -133,13 +136,66 @@ function FindingCard({ finding }: { finding: Finding }) {
   </article>;
 }
 
+function BankComparisonPanel({
+  comparison,
+  busy,
+  error,
+  onCompare,
+}: {
+  comparison: BankComparison | null;
+  busy: boolean;
+  error: ClientApiError | null;
+  onCompare: () => void;
+}) {
+  return <section className="panel comparison-panel">
+    <h2>타은행 비교</h2>
+    <p className="muted">규칙 기반 정성 비교이며 법률 자문이나 상품 추천이 아닙니다. 검증된 동종 은행 자료가 있을 때만 결과를 표시합니다.</p>
+    {!comparison && <button onClick={onCompare} disabled={busy}>{busy ? "비교 중…" : "타은행과 비교하기"}</button>}
+    {error && <section role="alert" className="error-panel">
+      <h3>{error.message}</h3>
+      {error.retryable && <button onClick={onCompare}>다시 시도</button>}
+    </section>}
+    {comparison?.comparison_status === "insufficient_peer_data" && (
+      <p className="muted">동종 상품을 등록한 은행이 아직 충분하지 않아(현재 {comparison.peer_bank_count}곳) 비교를 제공하지 않습니다.</p>
+    )}
+    {comparison?.comparison_status === "ready" && <>
+      <p className="muted">{comparison.generated_note} · 동종 은행 {comparison.peer_bank_count}곳과 비교 · corpus {comparison.corpus_version}</p>
+      <div className="comparison-grid">
+        <div className="comparison-pros">
+          <h3>장점</h3>
+          {comparison.pros.length === 0 && <p className="muted">동종 대비 뚜렷한 장점 신호가 없습니다.</p>}
+          {comparison.pros.map(item => <div className="comparison-item" key={item.rule_id}>
+            <b>{item.rule_name}</b>
+            <p>{item.explanation}</p>
+            <span className="comparison-rate">동종 은행 {item.peer_bank_count}곳 중 {Math.round(item.peer_match_rate * item.peer_bank_count)}곳 해당</span>
+          </div>)}
+        </div>
+        <div className="comparison-cons">
+          <h3>단점</h3>
+          {comparison.cons.length === 0 && <p className="muted">동종 대비 뚜렷한 단점 신호가 없습니다.</p>}
+          {comparison.cons.map(item => <div className="comparison-item" key={item.rule_id}>
+            <b>{item.rule_name}</b>
+            <p>{item.explanation}</p>
+            <span className="comparison-rate">동종 은행 {item.peer_bank_count}곳 중 {Math.round(item.peer_match_rate * item.peer_bank_count)}곳 해당</span>
+          </div>)}
+        </div>
+      </div>
+    </>}
+  </section>;
+}
+
 /** Own upload, progress, grounded review, report export, and explicit deletion. */
 export function AnalysisWorkspace() {
   const [file, setFile] = useState<File | null>(null);
   const [arm, setArm] = useState<"A" | "D">("D");
+  const [bankName, setBankName] = useState("");
+  const [productType, setProductType] = useState("");
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ClientApiError | null>(null);
+  const [comparison, setComparison] = useState<BankComparison | null>(null);
+  const [comparisonBusy, setComparisonBusy] = useState(false);
+  const [comparisonError, setComparisonError] = useState<ClientApiError | null>(null);
 
   async function continuePolling(target: Analysis) {
     setBusy(true); setError(null); setAnalysis(target);
@@ -152,12 +208,21 @@ export function AnalysisWorkspace() {
     event.preventDefault();
     if (!file) return;
     setBusy(true); setError(null); setAnalysis(null);
+    setComparison(null); setComparisonError(null);
     try {
-      const created = await uploadAndAnalyze(file, arm);
+      const created = await uploadAndAnalyze(file, arm, bankName, productType);
       setAnalysis(created);
       setAnalysis(await waitForAnalysis(created));
     } catch (reason) { setError(asClientError(reason, "upload")); }
     finally { setBusy(false); }
+  }
+
+  async function compareBanks() {
+    if (!analysis) return;
+    setComparisonBusy(true); setComparisonError(null);
+    try { setComparison(await getBankComparison(analysis.id)); }
+    catch (reason) { setComparisonError(asClientError(reason, "compare")); }
+    finally { setComparisonBusy(false); }
   }
 
   async function refresh() {
@@ -179,6 +244,7 @@ export function AnalysisWorkspace() {
     try {
       await deleteDocument(analysis.document_id);
       setAnalysis(null); setFile(null); setError(null);
+      setComparison(null); setComparisonError(null);
     } catch (reason) { setError(asClientError(reason, "delete")); }
   }
 
@@ -205,6 +271,14 @@ export function AnalysisWorkspace() {
       <h2>계약서 업로드</h2><p className="muted">TXT, PDF, DOCX · 최대 10MB · 원문은 분석 후 삭제할 수 있습니다.</p>
       <form onSubmit={submit}>
         <label className="drop"><input aria-label="계약서 파일" type="file" accept=".txt,.pdf,.docx" onChange={event => setFile(event.target.files?.[0] ?? null)} /><b>{file?.name ?? "파일을 선택하세요"}</b><span>마스킹 전 원문은 외부 모델이나 ChromaDB로 보내지 않습니다.</span></label>
+        <div className="tagging-fields">
+          <label>은행명(선택) <input aria-label="은행명" type="text" placeholder="예: 우리은행" value={bankName} onChange={event => setBankName(event.target.value)} /></label>
+          <label>상품유형(선택) <select aria-label="상품유형" value={productType} onChange={event => setProductType(event.target.value)}>
+            <option value="">선택 안 함</option>
+            {Object.entries(PRODUCT_TYPES).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select></label>
+        </div>
+        <p className="muted">은행명과 상품유형을 입력하면 분석 완료 후 타은행과 비교할 수 있습니다.</p>
         <div className="actions"><label>실험군 <select value={arm} onChange={event => setArm(event.target.value as "A" | "D")}><option value="A">A · 규칙 기준선</option><option value="D">D · mock 분석·검증</option></select></label><button disabled={!file || busy}>{busy ? `${statusLabels[progressState ?? "analyzing"] ?? "분석 중"}…` : "분석 시작"}</button></div>
       </form>
       {error && <section role="alert" className="error-panel"><h3>{error.message}</h3>{error.retryable && analysis && <button onClick={refresh}>상태 다시 확인</button>}<details><summary>기술 정보</summary><p>단계 {error.stage} · 코드 {error.code}{error.httpStatus ? ` · HTTP ${error.httpStatus}` : ""}</p></details></section>}
@@ -224,8 +298,14 @@ export function AnalysisWorkspace() {
       {(analysis.result?.warnings ?? []).map(warning => <p className="warning" key={warning}>{warning}</p>)}
       {analysis.result?.document?.masked_text && <section className="panel source-viewer"><h2>마스킹된 전체 문서</h2><p className="muted">개인정보 치환 {analysis.result.document.pii_replacement_count}건 · 실제 탐지 문구를 강조 표시합니다.</p><pre>{renderMaskedDocument(analysis.result.document.masked_text, findings)}</pre></section>}
       {findings.map(finding => <FindingCard finding={finding} key={finding.finding_id} />)}
-      <section className="panel limitations"><h2>데이터 제공 범위</h2><p><b>원문 뷰어</b>는 개인정보를 치환한 전체 텍스트만 표시합니다. 마스킹 전 텍스트는 화면·검색·외부 모델로 전송하지 않습니다.</p><p><b>은행 비교</b>는 검증된 공개·허가 비교 데이터가 아직 없어 순위·추천·비교 결과를 제공하지 않습니다.</p><p><b>리포트</b>는 계약 검토 보조 자료이며, 법률 판단이나 상품 추천이 아닙니다.</p></section>
+      {analysis.status === "completed" && <BankComparisonPanel
+        comparison={comparison}
+        busy={comparisonBusy}
+        error={comparisonError}
+        onCompare={compareBanks}
+      />}
+      <section className="panel limitations"><h2>데이터 제공 범위</h2><p><b>원문 뷰어</b>는 개인정보를 치환한 전체 텍스트만 표시합니다. 마스킹 전 텍스트는 화면·검색·외부 모델로 전송하지 않습니다.</p><p><b>리포트</b>는 계약 검토 보조 자료이며, 법률 판단이나 상품 추천이 아닙니다.</p></section>
     </section>}
-    {!analysis && <section className="panel limitations"><h2>은행 비교</h2><p>검증된 공개·허가 비교 데이터가 아직 없습니다. 따라서 순위나 추천은 표시하지 않습니다.</p></section>}
+    {!analysis && <section className="panel limitations"><h2>타은행 비교</h2><p>은행명과 상품유형을 입력해 분석하면, 검증된 동종 은행 자료가 있을 때 장단점 비교를 제공합니다. 검증된 자료가 없는 경우 순위나 추천은 표시하지 않습니다.</p></section>}
   </main>;
 }

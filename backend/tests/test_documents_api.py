@@ -8,6 +8,8 @@ from pypdf import PdfReader, PdfWriter
 from app.main import app
 from app.config import get_settings
 from app.models import AnalysisRecord, AuditEvent, DocumentRecord, get_session_factory
+from app.vectorstore.client import ensure_collections, get_chroma_client
+from app.vectorstore.embedding import embed
 
 SAMPLE = "제1조 은행은 필요하다고 인정하는 경우 서비스 내용을 일방적으로 변경할 수 있다."
 
@@ -194,3 +196,88 @@ def test_bank_comparison_fails_closed_without_a_verified_dataset() -> None:
         response = client.get("/api/v1/bank-comparisons")
     assert response.status_code == 503
     assert "비교 데이터" in response.json()["detail"]
+
+
+def test_upload_rejects_unknown_product_type() -> None:
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/documents",
+            data={"product_type": "not-a-real-product-type"},
+            files={"file": ("bad-type.txt", SAMPLE.encode(), "text/plain")},
+        )
+    assert response.status_code == 400
+
+
+def test_bank_comparison_requires_a_tagged_document() -> None:
+    with TestClient(app) as client:
+        uploaded = client.post(
+            "/api/v1/documents",
+            files={"file": ("no-tag.txt", SAMPLE.encode(), "text/plain")},
+        )
+        analyzed = client.post(
+            f"/api/v1/documents/{uploaded.json()['id']}/analyses", json={"experiment_arm": "A"}
+        )
+        response = client.get(f"/api/v1/analyses/{analyzed.json()['id']}/bank-comparison")
+    assert response.status_code == 422
+    assert "COMPARISON_DOCUMENT_NOT_TAGGED" in response.json()["detail"]
+
+
+def test_bank_comparison_fails_closed_when_corpus_not_ingested(monkeypatch) -> None:
+    monkeypatch.setattr("app.api.documents.has_peer_corpus_data", lambda: False)
+    with TestClient(app) as client:
+        uploaded = client.post(
+            "/api/v1/documents",
+            data={"bank_name": "우리은행", "product_type": "loan"},
+            files={"file": ("tagged.txt", SAMPLE.encode(), "text/plain")},
+        )
+        analyzed = client.post(
+            f"/api/v1/documents/{uploaded.json()['id']}/analyses", json={"experiment_arm": "A"}
+        )
+        response = client.get(f"/api/v1/analyses/{analyzed.json()['id']}/bank-comparison")
+    assert response.status_code == 503
+
+
+def test_bank_comparison_reports_insufficient_peer_data_for_untouched_product_type() -> None:
+    with TestClient(app) as client:
+        uploaded = client.post(
+            "/api/v1/documents",
+            data={"bank_name": "우리은행", "product_type": "insurance"},
+            files={"file": ("tagged-insurance.txt", SAMPLE.encode(), "text/plain")},
+        )
+        analyzed = client.post(
+            f"/api/v1/documents/{uploaded.json()['id']}/analyses", json={"experiment_arm": "A"}
+        )
+        response = client.get(f"/api/v1/analyses/{analyzed.json()['id']}/bank-comparison")
+    assert response.status_code == 200
+    assert response.json()["comparison_status"] == "insufficient_peer_data"
+
+
+def test_bank_comparison_happy_path_returns_ready_result_with_pros_and_cons() -> None:
+    ensure_collections()
+    collection = get_chroma_client().get_collection("bank_products")
+    peer_text = "본 상품은 매월 첫째 영업일에 이자를 지급한다."
+    collection.upsert(
+        ids=["api-happy-path:1", "api-happy-path:2"],
+        documents=[peer_text, peer_text],
+        embeddings=[embed(peer_text), embed(peer_text)],
+        metadatas=[
+            {"bank_name": "국민은행", "product_type": "deposit", "manifest_version": "test-bank-corpus-v0"},
+            {"bank_name": "신한은행", "product_type": "deposit", "manifest_version": "test-bank-corpus-v0"},
+        ],
+    )
+    with TestClient(app) as client:
+        uploaded = client.post(
+            "/api/v1/documents",
+            data={"bank_name": "우리은행", "product_type": "deposit"},
+            files={"file": ("tagged-deposit.txt", SAMPLE.encode(), "text/plain")},
+        )
+        analyzed = client.post(
+            f"/api/v1/documents/{uploaded.json()['id']}/analyses", json={"experiment_arm": "A"}
+        )
+        response = client.get(f"/api/v1/analyses/{analyzed.json()['id']}/bank-comparison")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["comparison_status"] == "ready"
+    assert body["peer_bank_count"] == 2
+    con_ids = {item["rule_id"] for item in body["cons"]}
+    assert "R04_UNILATERAL_CHANGE" in con_ids

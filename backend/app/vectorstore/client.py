@@ -7,13 +7,18 @@ import chromadb
 from app.config import get_settings
 from app.vectorstore.embedding import embedding_metadata, provider_name
 
-COLLECTION_NAMES = (
+# Collections that back legal-grounding evidence citations (findings' "법적 근거").
+LEGAL_COLLECTION_NAMES = (
     "statutes",
     "ftc_decisions",
     "court_decisions",
     "dispute_cases",
     "clause_patterns",
 )
+
+# All known collections, including the peer bank-product corpus used only for
+# bank comparison — never for legal-evidence citation (see LEGAL_COLLECTION_NAMES).
+COLLECTION_NAMES = LEGAL_COLLECTION_NAMES + ("bank_products",)
 
 
 @lru_cache

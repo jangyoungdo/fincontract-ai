@@ -4,7 +4,7 @@ import math
 from collections import Counter
 from typing import Any
 
-from app.vectorstore.client import COLLECTION_NAMES, get_chroma_client
+from app.vectorstore.client import LEGAL_COLLECTION_NAMES, get_chroma_client
 from app.vectorstore.embedding import provider_name, query_embedding, tokenize
 
 
@@ -20,7 +20,7 @@ class HybridRetriever:
         client = get_chroma_client()
         candidates = []
         query_tokens = tokenize(query)
-        for collection_name in COLLECTION_NAMES:
+        for collection_name in LEGAL_COLLECTION_NAMES:
             collection = client.get_or_create_collection(collection_name)
             if collection.count() == 0:
                 continue

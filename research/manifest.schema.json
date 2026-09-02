@@ -53,7 +53,8 @@
               "ftc_decisions",
               "court_decisions",
               "dispute_cases",
-              "clause_patterns"
+              "clause_patterns",
+              "bank_products"
             ]
           },
           "source_name": {"type": "string", "minLength": 1},

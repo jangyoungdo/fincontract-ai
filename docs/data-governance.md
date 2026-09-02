@@ -16,6 +16,7 @@
 - 저장: 원본·manifest와 ChromaDB 검색 인덱스
 - 필수 항목: 출처, 권위 기관, 기준일, hash, 라이선스, 재배포 가능 여부
 - 적재 조건: manifest schema 검증과 중복 제거 통과
+- `bank_products` 컬렉션(타은행 비교용)은 다른 공개 리서치 컬렉션과 동일한 manifest 검증 절차를 따르되, `HybridRetriever`의 법적 근거(evidence) 검색 대상에서는 제외합니다(`LEGAL_COLLECTION_NAMES`). 즉 은행 상품 조항이 "법적 근거 후보"로 findings에 섞여 들어가지 않습니다.
 
 ## 통계 사용
 

@@ -1,4 +1,11 @@
-export type ApiStage = "upload" | "analysis_create" | "poll" | "report" | "delete";
+export type ApiStage = "upload" | "analysis_create" | "poll" | "report" | "delete" | "compare";
+
+export const PRODUCT_TYPES: Record<string, string> = {
+  loan: "대출",
+  insurance: "보험",
+  deposit: "예적금",
+  card: "카드",
+};
 
 export class ClientApiError extends Error {
   constructor(
@@ -66,6 +73,35 @@ export type Finding = {
   clause?: { number: number; char_start: number; char_end: number };
 };
 
+export type DocumentInfo = {
+  id: string;
+  original_filename: string;
+  status: string;
+  bank_name?: string | null;
+  product_type?: string | null;
+};
+
+export type BankComparisonItem = {
+  rule_id: string;
+  rule_name: string;
+  our_signal: boolean;
+  peer_match_rate: number;
+  peer_bank_count: number;
+  explanation: string;
+};
+
+export type BankComparison = {
+  comparison_status: "ready" | "insufficient_peer_data";
+  product_type: string;
+  bank_name?: string | null;
+  peer_bank_count: number;
+  corpus_version: string;
+  generated_note: string;
+  pros: BankComparisonItem[];
+  cons: BankComparisonItem[];
+  neutral: BankComparisonItem[];
+};
+
 export type Analysis = {
   id: string;
   document_id: string;
@@ -101,6 +137,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   ANALYSIS_TIMEOUT: "분석이 120초 안에 끝나지 않았습니다. 분석 ID는 유지되므로 상태를 다시 확인하세요.",
   DOCUMENT_NOT_FOUND: "문서를 찾을 수 없습니다. 보존 기간 만료 또는 삭제 여부를 확인하세요.",
   ANALYSIS_FAILED: "분석을 완료하지 못했습니다. 상태를 다시 확인하거나 문서를 다시 업로드하세요.",
+  COMPARISON_DOCUMENT_NOT_TAGGED: "은행명과 상품유형을 입력한 문서만 타은행과 비교할 수 있습니다.",
 };
 
 const STAGE_FALLBACKS: Record<ApiStage, string> = {
@@ -109,6 +146,7 @@ const STAGE_FALLBACKS: Record<ApiStage, string> = {
   poll: "분석 상태를 확인하지 못했습니다. 잠시 후 상태를 다시 확인하세요.",
   report: "PDF 리포트를 내려받지 못했습니다. 분석 완료 상태를 확인하세요.",
   delete: "문서를 삭제하지 못했습니다. 잠시 후 다시 시도하세요.",
+  compare: "타은행 비교 결과를 가져오지 못했습니다. 잠시 후 다시 시도하세요.",
 };
 
 type ErrorPayload = { detail?: unknown; error_code?: unknown; code?: unknown; retryable?: unknown };
@@ -154,9 +192,16 @@ export function reportPdfUrl(analysisId: string): string {
 }
 
 /** Upload one validated file, then create an analysis for the selected experiment arm. */
-export async function uploadAndAnalyze(file: File, arm: "A" | "D"): Promise<Analysis> {
+export async function uploadAndAnalyze(
+  file: File,
+  arm: "A" | "D",
+  bankName?: string,
+  productType?: string,
+): Promise<Analysis> {
   const form = new FormData();
   form.append("file", file);
+  if (bankName) form.append("bank_name", bankName);
+  if (productType) form.append("product_type", productType);
   const uploaded = await safeFetch(`${API_BASE}/documents`, { method: "POST", body: form }, "upload");
   const document = await uploaded.json() as { id: string };
   const analyzed = await safeFetch(
@@ -212,4 +257,24 @@ export async function downloadReport(analysisId: string): Promise<void> {
 /** Request encrypted-file deletion and metadata tombstoning for one document. */
 export async function deleteDocument(documentId: string): Promise<void> {
   await safeFetch(`${API_BASE}/documents/${encodeURIComponent(documentId)}`, { method: "DELETE" }, "delete");
+}
+
+/** Fetch non-content document metadata, including bank/product tagging. */
+export async function getDocument(documentId: string): Promise<DocumentInfo> {
+  const response = await safeFetch(
+    `${API_BASE}/documents/${encodeURIComponent(documentId)}`,
+    { method: "GET", cache: "no-store" },
+    "poll",
+  );
+  return response.json() as Promise<DocumentInfo>;
+}
+
+/** Compare a completed analysis to the verified peer bank corpus, if any. */
+export async function getBankComparison(analysisId: string): Promise<BankComparison> {
+  const response = await safeFetch(
+    `${API_BASE}/analyses/${encodeURIComponent(analysisId)}/bank-comparison`,
+    { method: "GET", cache: "no-store" },
+    "compare",
+  );
+  return response.json() as Promise<BankComparison>;
 }

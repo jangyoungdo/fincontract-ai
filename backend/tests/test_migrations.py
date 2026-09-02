@@ -17,3 +17,10 @@ def test_initial_migration_is_recorded_and_idempotent() -> None:
         assert connection.execute(
             select(schema_migrations.c.version).where(schema_migrations.c.version == MIGRATION_VERSION)
         ).scalar_one() == MIGRATION_VERSION
+
+
+def test_bank_product_tagging_columns_exist_after_upgrade() -> None:
+    engine = get_engine()
+    upgrade_database(engine)
+    columns = {column["name"] for column in inspect(engine).get_columns("documents")}
+    assert {"bank_name", "product_type"}.issubset(columns)

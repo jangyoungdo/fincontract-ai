@@ -1,0 +1,83 @@
+{
+  "manifest_version": "bank-products-v0.1.0",
+  "generated_at": "2026-09-02T00:00:00+09:00",
+  "cutoff_date": "2026-09-02",
+  "status": "reviewing",
+  "known_limitations": [
+    "은행 2곳(우리은행, 한국씨티은행)만 포함된 초기 draft로, 타은행 비교의 통계적 대표성이 없다.",
+    "한국씨티은행 자료는 기업용 여신거래기본약관이며, 우리은행 자료는 가계용이다 — 개인 소비자 상품과 1:1 비교로 보기엔 한계가 있다.",
+    "두 자료 모두 공정거래위원회 표준약관을 기반으로 하여 대부분 조항이 실질적으로 동일하다 — 은행 간 실제 차이를 보여주는 예시로는 아직 부족하다.",
+    "raw_count/deduplicated_count는 약관 전체 조 단위 개수의 근사치이며, 위험 규칙과 직접 관련된 조항만 accepted_count로 발췌·적재했다.",
+    "이 manifest는 Claude(에이전트)가 웹서치로 수집한 초안이며, status가 아직 'verified'가 아니다. 사람이 각 source_url의 최신성·정확성·재배포 조건을 확인한 뒤 'verified'로 변경하고 make ingest-bank-products를 실행해야 실제로 비교 기능에 반영된다."
+  ],
+  "datasets": [
+    {
+      "dataset_id": "woori-bank-loan-terms-2016-selected",
+      "corpus_type": "bank_products",
+      "source_name": "주식회사 우리은행 은행여신거래기본약관(가계용)",
+      "source_url": "https://spot.wooribank.com/pot/bbs?cmd=download&BOARD_ID=B00179&ARTICLE_ID=3303&ATTACH_ID=28132",
+      "authority": "주식회사 우리은행",
+      "collection_method": "2026-09-02 우리은행 공식 홈페이지에 게시된 PDF를 다운로드하여 위험 규칙(기한이익상실·약관변경·관할합의)과 직접 관련된 조문만 발췌·적재",
+      "inclusion_criteria": [
+        "기한의 이익 상실 조항(제7조)",
+        "약관ㆍ부속약관 변경 조항(제20조)",
+        "관할법원의 합의 조항(제21조)"
+      ],
+      "exclusion_criteria": [
+        "개별 상품설명서ㆍ금리ㆍ수수료 등 상품별 변동 정보",
+        "위험 규칙과 직접 관련 없는 절차 조항(어음 처리, 상계 절차 등)"
+      ],
+      "raw_count": 21,
+      "deduplicated_count": 21,
+      "accepted_count": 3,
+      "rejected_count": 18,
+      "deduplication_key": "document_id:chunk_id",
+      "content_hash": "sha256:d52603dda72c41324c5c7f85a131daf1afbc5b747bdd3fa22cfa442ef3502f8e",
+      "license_status": "reviewing",
+      "license_basis": "공정거래위원회 표준약관 제10006호를 기반으로 은행이 은행법령상 게시ㆍ열람ㆍ교부 의무에 따라 영업점 및 홈페이지에 공개한 약관. 재배포 조건은 사람 검수가 필요함.",
+      "license_basis_url": "https://spot.wooribank.com/pot/bbs?cmd=download&BOARD_ID=B00179&ARTICLE_ID=3303&ATTACH_ID=28132",
+      "redistribution_allowed": null,
+      "review_status": "reviewing",
+      "reviewer": null,
+      "known_limitations": [
+        "표준약관 기반 게시본이므로 개별 대출 상품의 특약사항은 반영되지 않는다.",
+        "재배포ㆍ라이선스 조건은 사용자 검수 후 확정이 필요하다."
+      ],
+      "evaluation_exclusion": true
+    },
+    {
+      "dataset_id": "citibank-korea-corporate-loan-terms-2016-selected",
+      "corpus_type": "bank_products",
+      "source_name": "한국씨티은행 은행여신거래기본약관(기업용)",
+      "source_url": "https://www.citibank.co.kr/cgrp_pjt/down/kor/01_CR-A-338_201612.pdf",
+      "authority": "한국씨티은행",
+      "collection_method": "2026-09-02 한국씨티은행 공식 홈페이지에 게시된 PDF를 다운로드하여 위험 규칙(기한이익상실·약관변경·관할합의)과 직접 관련된 조문만 발췌·적재",
+      "inclusion_criteria": [
+        "기한의 이익 상실 조항(제7조)",
+        "약관ㆍ부속약관 변경 조항(제22조)",
+        "관할법원의 합의 조항(제23조)"
+      ],
+      "exclusion_criteria": [
+        "개별 상품설명서ㆍ금리ㆍ수수료 등 상품별 변동 정보",
+        "위험 규칙과 직접 관련 없는 절차 조항(어음 처리, 상계 절차 등)"
+      ],
+      "raw_count": 23,
+      "deduplicated_count": 23,
+      "accepted_count": 3,
+      "rejected_count": 20,
+      "deduplication_key": "document_id:chunk_id",
+      "content_hash": "sha256:d01026ed330a6c660f7e2bb86a8ea3b98512ffe1e8c0904d941e939171a154cd",
+      "license_status": "reviewing",
+      "license_basis": "공정거래위원회 표준약관 제10006호를 기반으로 은행이 은행법령상 게시ㆍ열람ㆍ교부 의무에 따라 영업점 및 홈페이지에 공개한 약관. 재배포 조건은 사람 검수가 필요함.",
+      "license_basis_url": "https://www.citibank.co.kr/cgrp_pjt/down/kor/01_CR-A-338_201612.pdf",
+      "redistribution_allowed": null,
+      "review_status": "reviewing",
+      "reviewer": null,
+      "known_limitations": [
+        "기업용(가계용이 아님) 약관이므로 개인 소비자 상품 비교로는 참고용으로만 사용해야 한다.",
+        "재배포ㆍ라이선스 조건은 사용자 검수 후 확정이 필요하다."
+      ],
+      "evaluation_exclusion": true
+    }
+  ]
+}

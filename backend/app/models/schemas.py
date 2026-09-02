@@ -13,6 +13,8 @@ class DocumentResponse(BaseModel):
     mime_type: str
     sha256: str
     status: str
+    bank_name: str | None = None
+    product_type: str | None = None
     uploaded_at: datetime
     expires_at: datetime
     deleted_at: datetime | None = None
@@ -40,6 +42,29 @@ class DeleteResponse(BaseModel):
     """Confirm that a document was tombstoned and its encrypted file removed."""
     id: str
     status: Literal["deleted"]
+
+
+class BankComparisonItem(BaseModel):
+    """One rule-level pro/con/neutral verdict against the peer bank corpus."""
+    rule_id: str
+    rule_name: str
+    our_signal: bool
+    peer_match_rate: float
+    peer_bank_count: int
+    explanation: str
+
+
+class BankComparisonResponse(BaseModel):
+    """Rule-based qualitative comparison against a verified peer bank corpus."""
+    comparison_status: Literal["ready", "insufficient_peer_data"]
+    product_type: str
+    bank_name: str | None = None
+    peer_bank_count: int
+    corpus_version: str
+    generated_note: str
+    pros: list[BankComparisonItem] = []
+    cons: list[BankComparisonItem] = []
+    neutral: list[BankComparisonItem] = []
 
 
 class AuditEventResponse(BaseModel):

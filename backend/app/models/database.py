@@ -25,6 +25,8 @@ class DocumentRecord(Base):
     status: Mapped[str] = mapped_column(String(30), default="uploaded")
     storage_path: Mapped[str] = mapped_column(String(500))
     masked_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    bank_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    product_type: Mapped[str | None] = mapped_column(String(30), nullable=True)
     uploaded_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
