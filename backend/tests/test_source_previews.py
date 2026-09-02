@@ -35,6 +35,7 @@ def test_pdf_preview_is_png_with_burned_redaction_and_match_highlight(tmp_path) 
                     "masked_text": "Email [EMAIL_1]. Customer pays 5% fee.",
                     "match_span": [33, 39],
                     "page_number": 1,
+                    "_generate_pdf_preview": True,
                 },
                 "rule_signal": {"matched_excerpt": "5% fee"},
             }
@@ -64,6 +65,7 @@ def test_preview_falls_back_to_masked_text_when_match_cannot_be_located(tmp_path
                     "masked_text": "존재하지 않는 문구",
                     "match_span": [0, 10],
                     "page_number": 1,
+                    "_generate_pdf_preview": True,
                 },
                 "rule_signal": {"matched_excerpt": "존재하지 않는 문구"},
             }
@@ -85,6 +87,7 @@ def test_cross_page_match_creates_at_most_two_preview_images(tmp_path) -> None:
                     "masked_text": "First page target.\nSecond page target.",
                     "match_span": [0, 38],
                     "page_number": 1,
+                    "_generate_pdf_preview": True,
                     "_preview_targets": [
                         {"page_number": 1, "text": "First page target."},
                         {"page_number": 2, "text": "Second page target."},
@@ -107,6 +110,30 @@ def test_cross_page_match_creates_at_most_two_preview_images(tmp_path) -> None:
     assert source["preview_status"] == "available"
     assert len(source["preview_ids"]) == 2
     assert "_preview_targets" not in source
+
+
+def test_semantic_candidate_does_not_generate_pdf_preview(tmp_path) -> None:
+    result = {
+        "findings": [],
+        "candidate_findings": [
+            {
+                "candidate_id": "candidate:test",
+                "source": {
+                    "masked_text": "Customer pays 5% fee.",
+                    "match_span": [0, 21],
+                    "page_number": 1,
+                },
+            }
+        ],
+    }
+    settings = SimpleNamespace(ocr_languages="eng", ocr_timeout_seconds=15)
+    enriched = generate_pdf_source_previews(
+        make_pdf(), "analysis-candidate", result, tmp_path, settings
+    )
+    source = enriched["candidate_findings"][0]["source"]
+    assert source["preview_status"] == "text_only"
+    assert source["preview_ids"] == []
+    assert not (tmp_path / "previews" / "analysis-candidate").exists()
 
 
 def test_visual_redaction_labels_can_continue_across_pages() -> None:

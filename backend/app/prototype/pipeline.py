@@ -151,6 +151,11 @@ class PrototypePipeline:
             # Verification failures are never silently downgraded to a usable result.
             disposition = "needs_review"
 
+        if experiment_arm == "D" and self.provider.name == "mock":
+            runtime_warnings.add(
+                "mock 에이전트 결과는 실제 LLM 품질 평가에 사용할 수 없습니다."
+            )
+
         return {
             "analysis_id": analysis_id,
             "api_version": "analysis-2",
@@ -180,11 +185,7 @@ class PrototypePipeline:
                 "total_estimated_input_tokens": sum(call["estimated_input_tokens"] for call in usage),
                 "total_max_output_tokens": sum(call["max_output_tokens"] for call in usage),
             },
-            "warnings": [
-                "법적 근거는 검증 전 후보이며 원문·시행일 확인이 필요합니다.",
-                "mock 에이전트 결과는 실제 LLM 품질 평가에 사용할 수 없습니다.",
-                "이 결과는 법률 판단이 아닌 검토 보조 자료입니다.",
-            ] + sorted(runtime_warnings),
+            "warnings": sorted(runtime_warnings),
             "created_at": created_at,
             "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
         }

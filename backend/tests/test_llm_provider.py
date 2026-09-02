@@ -281,6 +281,56 @@ def test_openai_provider_reviews_masked_clause_context_with_strict_schema() -> N
     assert provider.last_call_metadata()["prompt_version"] == "context-review-v1"
 
 
+def test_openai_provider_summarizes_masked_review_results_with_strict_schema() -> None:
+    captured = {}
+
+    class Response:
+        status_code = 200
+
+        @staticmethod
+        def json():
+            return {
+                "id": "resp_summary",
+                "model": "gpt-test-model",
+                "usage": {"input_tokens": 180, "output_tokens": 45},
+                "output": [
+                    {
+                        "type": "message",
+                        "content": [
+                            {
+                                "type": "output_text",
+                                "text": '{"lines":["금리 변경 위험 신호 2건이 확인되었습니다.","관련 조항의 변경 조건을 우선 검토해야 합니다."]}',
+                            }
+                        ],
+                    }
+                ],
+            }
+
+    class Client:
+        @staticmethod
+        def post(endpoint, **kwargs):
+            captured.update({"endpoint": endpoint, **kwargs})
+            return Response()
+
+    provider = OpenAIProvider.__new__(OpenAIProvider)
+    provider.client = Client()
+    provider._last_call = {}
+    result = provider.summarize_review(
+        {
+            "rule_finding_count": 2,
+            "candidate_finding_count": 0,
+            "top_categories": ["금리 변경"],
+        },
+        "gpt-test-model",
+    )
+
+    assert len(result["lines"]) == 2
+    assert result["lines"][0].startswith("금리 변경")
+    assert captured["json"]["store"] is False
+    assert captured["json"]["text"]["format"]["name"] == "fincontract_review_summary"
+    assert provider.last_call_metadata()["prompt_version"] == "review-summary-v1"
+
+
 def test_openai_provider_blocks_unmasked_pii_before_network_call() -> None:
     class Client:
         @staticmethod

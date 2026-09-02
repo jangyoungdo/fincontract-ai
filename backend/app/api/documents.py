@@ -203,7 +203,7 @@ def create_analysis(document_id: str, request: AnalysisRequest, response: Respon
             status=record.status,
             disposition=record.disposition,
             experiment_arm=record.experiment_arm,
-            result=json.loads(record.result_json) if record.result_json else None,
+            result=_public_result(json.loads(record.result_json)) if record.result_json else None,
             error_code=record.error_code,
             retryable=_is_retryable_error(record.error_code),
         )
@@ -240,6 +240,15 @@ def _public_result(result: dict) -> dict:
     document = result.get("document")
     if isinstance(document, dict):
         document.pop("masked_text", None)
+    hidden_warnings = {
+        "LLM_SCHEMA_INVALID",
+        "mock 에이전트 결과는 실제 LLM 품질 평가에 사용할 수 없습니다.",
+        "법적 근거는 검증 전 후보이며 원문·시행일 확인이 필요합니다.",
+        "이 결과는 법률 판단이 아닌 검토 보조 자료입니다.",
+    }
+    warnings = result.get("warnings")
+    if isinstance(warnings, list):
+        result["warnings"] = [warning for warning in warnings if warning not in hidden_warnings]
     return result
 
 

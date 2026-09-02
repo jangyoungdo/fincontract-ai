@@ -43,6 +43,7 @@ const warningLabels: Record<string, string> = {
   OPENAI_CONTEXT_REVIEW_FAILED: "OpenAI 문맥 검토를 완료하지 못했습니다. 규칙 및 로컬 의미 결과는 그대로 보존되었습니다.",
   OPENAI_CONTEXT_REVIEW_TRUNCATED: "문맥 검토 호출 한도에 따라 일부 긴 조항은 OpenAI 추가 검토에서 제외되었습니다.",
   OPENAI_CONTEXT_OUTPUT_REJECTED: "원문 인용이나 분류 검증을 통과하지 못한 OpenAI 후보는 결과에서 제외했습니다.",
+  OPENAI_SUMMARY_FAILED: "OpenAI 핵심 요약을 완료하지 못해 결정론 요약을 표시합니다.",
   LLM_RATE_LIMITED: "OpenAI 호출 한도에 도달해 문맥 검토를 생략했습니다.",
   LLM_QUOTA_EXCEEDED: "OpenAI API 사용 한도로 문맥 검토를 생략했습니다.",
 };
@@ -216,7 +217,7 @@ export function AnalysisWorkspace() {
         {analysis.status === "completed" && <button className="report-link" onClick={report}>PDF 리포트</button>}
         <button className="secondary" onClick={remove}>원문·결과 삭제</button>
       </div>
-      {analysis.result?.summary?.headline && <section className="panel document-summary"><h2>핵심 요약</h2><p>{analysis.result.summary.headline}</p></section>}
+      {analysis.result?.summary?.headline && <section className="panel document-summary"><h2>핵심 요약</h2>{(analysis.result.summary.lines?.length ? analysis.result.summary.lines : [analysis.result.summary.headline]).map((line, index) => <p key={`${index}-${line}`}>{line}</p>)}</section>}
       {analysis.status === "failed" && <FailurePanel analysis={analysis} onRetry={refresh} />}
       {analysis.disposition === "no_signal" && <section className="no-signal"><h2>검토 신호 없음</h2><p>현재 19개 규칙과 추가 의미 검토에서 위험 신호가 탐지되지 않았습니다. 이는 계약의 안전성이나 적법성을 보장하지 않습니다.</p></section>}
       {(analysis.result?.warnings ?? []).map(warning => <p className="warning" key={warning}>{warningLabels[warning] ?? warning}</p>)}

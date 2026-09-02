@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     openai_context_max_calls: int = 2
     openai_context_max_chars_per_call: int = 12_000
     openai_context_max_candidates_per_section: int = 3
+    openai_summary_enabled: bool = True
     llm_max_calls_per_analysis: int = 8
     semantic_model_enabled: bool = True
     semantic_model_required: bool = False

@@ -47,16 +47,14 @@ def test_analysis_attaches_retrieved_grounding_to_masked_findings() -> None:
     assert "[EMAIL_1]" in finding["source"]["masked_text"]
 
 
-def test_arm_d_uses_retrieved_evidence_before_assessment_and_preserves_disposition() -> None:
+def test_full_pipeline_reserves_provider_for_document_context_review() -> None:
     result = DocumentAnalysisPipeline().run(
         "은행은 필요하다고 인정하는 경우 서비스 내용을 일방적으로 변경할 수 있다.", "D"
     )
     finding = result["findings"][0]
-    assert finding["assessment"]["cited_evidence_ids"]
-    assert set(finding["assessment"]["cited_evidence_ids"]) == {
-        item["evidence_id"] for item in finding["evidence"]
-    }
-    assert finding["verification"]["status"] == "passed"
+    assert finding["assessment"] is None
+    assert finding["verification"]["status"] == "not_run"
+    assert result["usage"]["calls"] == []
     assert result["disposition"] == "ready_for_review"
 
 

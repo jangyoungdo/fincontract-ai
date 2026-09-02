@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -63,6 +64,8 @@ def enqueue_analysis(redis_client: Redis, analysis_id: str) -> None:
 
 def process_analysis(analysis_id: str, redis_client: Redis | None = None) -> None:
     """Process one persisted job. The queue contains only an opaque analysis ID."""
+    overall_started = time.perf_counter()
+    logger.info("analysis.job.start analysis_id=%s", analysis_id)
     with get_session_factory()() as session:
         record = session.get(AnalysisRecord, analysis_id)
         if not record or record.status in {"completed", "deleted"}:
@@ -78,16 +81,41 @@ def process_analysis(analysis_id: str, redis_client: Redis | None = None) -> Non
         if redis_client:
             set_progress(redis_client, analysis_id, "analyzing", 25)
         try:
+            stage_started = time.perf_counter()
             data = read_encrypted(Path(document.storage_path))
+            logger.info(
+                "analysis.job.storage_read_done analysis_id=%s bytes=%s elapsed_ms=%.2f",
+                analysis_id,
+                len(data),
+                (time.perf_counter() - stage_started) * 1000,
+            )
             extension = Path(document.original_filename).suffix.lower()
+            stage_started = time.perf_counter()
             extracted = extract_document(data, extension)
+            logger.info(
+                "analysis.job.extraction_done analysis_id=%s extension=%s pages=%s chars=%s elapsed_ms=%.2f",
+                analysis_id,
+                extension,
+                len(extracted.pages),
+                len(extracted.text),
+                (time.perf_counter() - stage_started) * 1000,
+            )
+            stage_started = time.perf_counter()
             result = DocumentAnalysisPipeline().run(
                 extracted.text,
                 record.experiment_arm,
                 pages=extracted.pages,
                 source_extension=extension,
             )
+            logger.info(
+                "analysis.job.pipeline_done analysis_id=%s findings=%s candidates=%s elapsed_ms=%.2f",
+                analysis_id,
+                len(result.get("findings", [])),
+                len(result.get("candidate_findings", [])),
+                (time.perf_counter() - stage_started) * 1000,
+            )
             if extension == ".pdf":
+                stage_started = time.perf_counter()
                 result = generate_pdf_source_previews(
                     data,
                     analysis_id,
@@ -95,6 +123,11 @@ def process_analysis(analysis_id: str, redis_client: Redis | None = None) -> Non
                     get_settings().report_dir,
                     get_settings(),
                     extracted.pages,
+                )
+                logger.info(
+                    "analysis.job.previews_done analysis_id=%s elapsed_ms=%.2f",
+                    analysis_id,
+                    (time.perf_counter() - stage_started) * 1000,
                 )
             record.status = "completed"
             record.disposition = result["disposition"]
@@ -145,4 +178,12 @@ def process_analysis(analysis_id: str, redis_client: Redis | None = None) -> Non
             if redis_client:
                 redis_client.rpush(DEAD_LETTER_QUEUE_NAME, analysis_id)
                 set_progress(redis_client, analysis_id, "failed", 100)
+        commit_started = time.perf_counter()
         session.commit()
+        logger.info(
+            "analysis.job.done analysis_id=%s status=%s commit_ms=%.2f total_ms=%.2f",
+            analysis_id,
+            record.status,
+            (time.perf_counter() - commit_started) * 1000,
+            (time.perf_counter() - overall_started) * 1000,
+        )
