@@ -252,3 +252,97 @@ Redis를 활성화한 환경에서는 `make run-worker`로 분석 ID만 전달�
 5. 첫 번째 대상 계약 유형과 2~3개 탐지 규칙 선택
 6. 검색 코퍼스와 겹치지 않는 소규모 골드셋 및 검토자 확보
 7. MVP에서 Redis Worker를 사용할지 결정
+
+## AWS EC2 단일 서버 배포 실험 기록
+
+2026년 9월 2일, 로컬에서 개발한 FinContract AI 전체 스택을 서울 리전의 단일 EC2
+인스턴스로 옮기고 Mac에서 원격 배포하는 흐름을 검증했습니다. 이 기록은 정식 운영
+아키텍처가 아니라 토이 프로젝트와 기능 시연을 위한 실험 기준입니다. 계정 ID, 인스턴스 ID,
+Elastic IP, API 키와 인증 토큰은 저장소에 기록하지 않습니다.
+
+### 실험 환경
+
+- 리전: 서울(`ap-northeast-2`)
+- OS: Ubuntu 26.04 LTS
+- 인스턴스: `m7i-flex.large`(2 vCPU, 8 GiB 메모리)
+- 루트 볼륨: 40 GiB `gp3`
+- 추가 Swap: 2 GiB, `vm.swappiness=10`
+- 런타임: Docker Engine 29.7.2, Docker Compose 5.5.0
+- 외부 진입점: Caddy의 80/443 포트와 ngrok HTTPS 터널
+- 서버 관리: AWS Systems Manager Session Manager를 이용한 SSH
+
+보안 그룹의 SSH 22번 포트는 SSM 접속 확인 후 제거했습니다. PostgreSQL, Redis와
+ChromaDB 포트는 외부에 공개하지 않고, Backend와 Frontend의 호스트 포트도
+`127.0.0.1`에만 바인딩했습니다. ngrok은 EC2의 Frontend 3000번 포트로 전달하므로
+브라우저 요청의 `/api/v1` 경로가 Next.js를 거쳐 내부 Backend로 연결됩니다.
+
+### 배포 과정
+
+1. EC2에 Docker와 Compose를 설치하고 로그 회전을 설정했습니다.
+2. 저장소를 `/opt/fincontract`에 복제하고 `.env`를 서버에서 별도로 생성했습니다.
+3. `docker-compose.yml`과 `compose.production.yml`을 함께 사용해 이미지를 빌드했습니다.
+4. PostgreSQL 마이그레이션과 공개 코퍼스 초기화를 one-shot 컨테이너로 실행했습니다.
+5. Backend, worker, retention, Frontend와 Caddy를 장기 실행 서비스로 기동했습니다.
+6. OpenAI Responses API를 활성화하고 합성 데이터로 구조화 출력과 문맥 검토를 확인했습니다.
+7. ngrok 에이전트를 systemd 서비스로 등록해 장애나 재부팅 후 자동으로 다시 시작하도록 했습니다.
+
+OpenAI 실험은 `gpt-5.6-luna`를 사용했습니다. 규칙 근거 설명과 문맥 검토 모두 스키마
+검증을 통과했고 Responses API의 `store`는 `false`로 확인했습니다. 실제 사용자 문서가
+아닌 합성 계약서를 ngrok HTTPS 주소에서 업로드한 뒤, 분석 완료, 검토 결과 조회,
+PDF 보고서 반환과 문서 삭제까지 전체 흐름을 검증했습니다.
+
+### 코드 변경 후 재배포
+
+코드는 Mac에서 수정·테스트·커밋·푸시하고, EC2에서는 배포 브랜치를 fast-forward로만
+갱신합니다. 소스는 Docker 이미지에 복사되므로 단순 `restart`로는 코드가 반영되지 않습니다.
+
+```bash
+ssh fincontract-prod
+cd /opt/fincontract
+git pull --ff-only
+
+docker compose \
+  -f docker-compose.yml \
+  -f compose.production.yml \
+  up -d --build
+
+docker compose \
+  -f docker-compose.yml \
+  -f compose.production.yml \
+  ps
+```
+
+ngrok은 고정된 Frontend 3000번 포트를 계속 바라보므로 코드 재배포 때 재시작할 필요가
+없습니다. 컨테이너 교체 중에는 잠깐 502 응답이 발생할 수 있지만 Frontend가 다시 기동되면
+같은 터널로 복구됩니다. ngrok 토큰이나 전달 포트를 변경했을 때만 서비스를 재시작합니다.
+
+```bash
+sudo systemctl status fincontract-ngrok
+sudo systemctl restart fincontract-ngrok
+sudo journalctl -u fincontract-ngrok -f
+```
+
+`.env`의 OpenAI 제공자, 모델 또는 API 키를 변경한 경우 환경변수를 다시 읽도록 Backend와
+worker를 재생성합니다.
+
+```bash
+docker compose \
+  -f docker-compose.yml \
+  -f compose.production.yml \
+  up -d --force-recreate backend worker
+```
+
+### 운영 중 확인 사항
+
+- 상태와 최근 로그는 `docker compose -f docker-compose.yml -f compose.production.yml ps`와
+  `logs --tail=100 backend worker frontend gateway`로 확인합니다.
+- 반복 빌드로 캐시가 쌓일 수 있으므로 `df -h /`와 `docker system df`로 40 GiB 디스크를
+  확인하고, 필요할 때 `docker builder prune`으로 빌드 캐시만 정리합니다.
+- PostgreSQL, ChromaDB, 암호화된 업로드와 보고서는 Docker named volume에 남으므로 일반적인
+  `up -d --build`로 삭제되지 않습니다.
+- `docker compose down -v`와 `docker system prune --volumes`는 영속 데이터를 삭제할 수
+  있으므로 사용하지 않습니다.
+- AWS CLI 인증이 만료되어도 EC2, Docker, ngrok과 웹 서비스는 계속 실행됩니다. 새 SSM SSH
+  연결이 필요할 때만 `aws login`으로 다시 인증합니다.
+- 현재 실험 환경의 볼륨 암호화, 백업, 사용자 인증과 정식 도메인은 운영 전환 시 별도로
+  보강할 항목입니다.
