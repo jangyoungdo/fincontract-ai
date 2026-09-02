@@ -1,6 +1,6 @@
 # 시스템 아키텍처
 
-![FinContract AI EC2 운영 실험 아키텍처](../assets/fincontract-ai-architecture-v5.svg)
+![FinContract AI EC2 시스템 아키텍처](../assets/fincontract-ai-architecture-v6.svg)
 
 ## 경계
 
@@ -28,6 +28,18 @@
 8. Structured Outputs 응답의 evidence ID와 인용문을 검증합니다.
 9. 근거가 부족하거나 검증에 실패하면 `needs_review`로 종료합니다.
 10. 결과와 provenance를 저장하고 frontend에 반환합니다.
+
+## RAG와 의미 후보의 구분
+
+- RAG는 규칙이 탐지한 마스킹 조항을 질의로 사용해 ChromaDB의 공개 법률 코퍼스에서
+  근거 후보를 가져옵니다. 벡터 점수 45%, BM25 점수 40%, 출처 권위 점수 15%를 결합하고
+  상위 3개 `evidence_id`를 분석과 인용 검증에 전달합니다.
+- ChromaDB의 5개 컬렉션은 법령, 공정위 심결, 법원 판례, 분쟁조정 사례와 조항 패턴을
+  구분합니다. 현재 검증된 공개 코퍼스는 약관법 7개 조문입니다.
+- 오프라인 `multilingual-e5-small`은 RAG 저장소를 검색하는 모델이 아닙니다. 규칙이 놓칠
+  가능성이 있는 위험 범주를 의미 유사도로 찾고 `candidate_findings[]`에만 추가합니다.
+- OpenAI는 RAG 검색을 대신하지 않습니다. 마스킹된 조항 문맥으로 추가 후보를 검토하고,
+  검증된 규칙·근거 결과를 사용해 사용자용 요약을 보강합니다.
 
 ## 저장소 역할
 
