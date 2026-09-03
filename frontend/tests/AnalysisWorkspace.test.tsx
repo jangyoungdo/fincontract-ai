@@ -44,7 +44,7 @@ const detailedFinding = {
   clause: { number: 1, char_start: 0, char_end: 15 },
 };
 
-function mockUploadResult(overrides: Record<string, unknown> = {}) {
+function mockUploadResult(overrides: Record<string, unknown> = {}, warnings: string[] = []) {
   return vi.fn()
     .mockResolvedValueOnce({ ok: true, json: async () => ({ id: "document-1" }) })
     .mockResolvedValueOnce({
@@ -57,7 +57,7 @@ function mockUploadResult(overrides: Record<string, unknown> = {}) {
         experiment_arm: "D",
         result: {
           findings: [detailedFinding],
-          warnings: [],
+          warnings,
           clause_count: 1,
           summary: { headline: "이 문서에서는 계약 변경 관련 규칙 위험 신호 1건이 확인되었습니다.", top_categories: ["사업자의 일방적 계약내용 변경"] },
           document: { pii_types: [], pii_replacement_count: 0, page_count: 3, source_type: "pdf" },
@@ -127,6 +127,15 @@ describe("AnalysisWorkspace", () => {
     await upload(fetchMock);
     expect(screen.getByText(/현재 19개 규칙과 추가 의미 검토에서 위험 신호가 탐지되지 않았습니다/)).toBeInTheDocument();
     expect(screen.getByText(/안전성이나 적법성을 보장하지 않습니다/)).toBeInTheDocument();
+  });
+
+  it("hides rejected OpenAI candidates while preserving actionable warnings", async () => {
+    const fetchMock = mockUploadResult({}, ["OPENAI_CONTEXT_OUTPUT_REJECTED", "LLM_QUOTA_EXCEEDED"]);
+    await upload(fetchMock);
+
+    expect(screen.queryByText(/원문 인용이나 분류 검증/)).not.toBeInTheDocument();
+    expect(screen.queryByText("OPENAI_CONTEXT_OUTPUT_REJECTED")).not.toBeInTheDocument();
+    expect(screen.getByText(/OpenAI API 사용 한도로 문맥 검토를 생략했습니다/)).toBeInTheDocument();
   });
 
   it("shows a failed analysis code and preserves the status recheck action", async () => {

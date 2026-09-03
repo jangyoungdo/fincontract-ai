@@ -42,7 +42,6 @@ const warningLabels: Record<string, string> = {
   EXPERIMENT_ARM_DEPRECATED: "이전 A/D 요청값은 더 이상 분석 동작을 선택하지 않습니다.",
   OPENAI_CONTEXT_REVIEW_FAILED: "OpenAI 문맥 검토를 완료하지 못했습니다. 규칙 및 로컬 의미 결과는 그대로 보존되었습니다.",
   OPENAI_CONTEXT_REVIEW_TRUNCATED: "문맥 검토 호출 한도에 따라 일부 긴 조항은 OpenAI 추가 검토에서 제외되었습니다.",
-  OPENAI_CONTEXT_OUTPUT_REJECTED: "원문 인용이나 분류 검증을 통과하지 못한 OpenAI 후보는 결과에서 제외했습니다.",
   OPENAI_SUMMARY_FAILED: "OpenAI 핵심 요약을 완료하지 못해 결정론 요약을 표시합니다.",
   LLM_RATE_LIMITED: "OpenAI 호출 한도에 도달해 문맥 검토를 생략했습니다.",
   LLM_QUOTA_EXCEEDED: "OpenAI API 사용 한도로 문맥 검토를 생략했습니다.",
@@ -187,6 +186,7 @@ export function AnalysisWorkspace() {
   const progressState = analysis?.progress?.state ?? analysis?.status;
   const findings = analysis?.result?.findings ?? [];
   const candidateFindings = analysis?.result?.candidate_findings ?? [];
+  const userWarnings = (analysis?.result?.warnings ?? []).filter(warning => warning !== "OPENAI_CONTEXT_OUTPUT_REJECTED");
 
   return <main>
     <section className="hero">
@@ -235,7 +235,7 @@ export function AnalysisWorkspace() {
       {analysis.result?.summary?.headline && <section className="panel document-summary"><h2>핵심 요약</h2>{(analysis.result.summary.lines?.length ? analysis.result.summary.lines : [analysis.result.summary.headline]).map((line, index) => <p key={`${index}-${line}`}>{line}</p>)}</section>}
       {analysis.status === "failed" && <FailurePanel analysis={analysis} onRetry={refresh} />}
       {analysis.disposition === "no_signal" && <section className="no-signal"><h2>검토 신호 없음</h2><p>현재 19개 규칙과 추가 의미 검토에서 위험 신호가 탐지되지 않았습니다. 이는 계약의 안전성이나 적법성을 보장하지 않습니다.</p></section>}
-      {(analysis.result?.warnings ?? []).map(warning => <p className="warning" key={warning}>{warningLabels[warning] ?? warning}</p>)}
+      {userWarnings.map(warning => <p className="warning" key={warning}>{warningLabels[warning] ?? warning}</p>)}
       {findings.map(finding => <FindingCard finding={finding} analysisId={analysis.id} key={finding.finding_id} />)}
       {candidateFindings.length > 0 && <section className="panel"><h2>추가 의미 검토 후보</h2><p className="muted">로컬 의미 모델과 선택적 OpenAI 문맥 검토가 제안한 후보이며, 같은 조문·유형의 규칙 탐지와 중복되는 항목은 제외합니다.</p>{candidateFindings.map(candidate => <CandidateCard candidate={candidate} analysisId={analysis.id} key={candidate.candidate_id} />)}</section>}
       <section className="panel limitations"><h2>데이터 제공 범위</h2><p><b>원문 근거</b>는 탐지된 조항의 개인정보 제거 조각만 표시하며 문서 전문은 브라우저로 전송하지 않습니다.</p><p><b>은행 비교</b>는 검증된 공개·허가 비교 데이터가 아직 없어 순위·추천·비교 결과를 제공하지 않습니다.</p><p><b>리포트</b>는 계약 검토 보조 자료이며, 법률 판단이나 상품 추천이 아닙니다.</p></section>
