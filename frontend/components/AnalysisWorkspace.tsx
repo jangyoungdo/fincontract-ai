@@ -42,7 +42,6 @@ const warningLabels: Record<string, string> = {
   EXPERIMENT_ARM_DEPRECATED: "이전 A/D 요청값은 더 이상 분석 동작을 선택하지 않습니다.",
   OPENAI_CONTEXT_REVIEW_FAILED: "OpenAI 문맥 검토를 완료하지 못했습니다. 규칙 및 로컬 의미 결과는 그대로 보존되었습니다.",
   OPENAI_CONTEXT_REVIEW_TRUNCATED: "문맥 검토 호출 한도에 따라 일부 긴 조항은 OpenAI 추가 검토에서 제외되었습니다.",
-  OPENAI_CONTEXT_OUTPUT_REJECTED: "원문 인용이나 분류 검증을 통과하지 못한 OpenAI 후보는 결과에서 제외했습니다.",
   OPENAI_SUMMARY_FAILED: "OpenAI 핵심 요약을 완료하지 못해 결정론 요약을 표시합니다.",
   LLM_RATE_LIMITED: "OpenAI 호출 한도에 도달해 문맥 검토를 생략했습니다.",
   LLM_QUOTA_EXCEEDED: "OpenAI API 사용 한도로 문맥 검토를 생략했습니다.",
@@ -71,6 +70,8 @@ function FailurePanel({ analysis, onRetry }: { analysis: Analysis; onRetry: () =
 
 function FindingCard({ finding, analysisId }: { finding: Finding; analysisId: string }) {
   const explanation = finding.explanation;
+  const matchedElements = finding.rule_signal.matched_elements ?? [];
+  const exampleClause = explanation.example_clause ?? explanation.suggested_revision;
   const page = finding.source.page_number ? ` · PDF ${finding.source.page_number}페이지` : "";
   const previews = finding.source.preview_status === "available" ? finding.source.preview_ids ?? [] : [];
   return <article className="finding">
@@ -82,11 +83,17 @@ function FindingCard({ finding, analysisId }: { finding: Finding; analysisId: st
     <p className="finding-summary">{finding.summary_sentence}</p>
 
     <section className="finding-source">
-      <h4>실제 문서의 마스킹 원문 근거</h4>
+      <h4>위험 표현이 결합된 원문 근거</h4>
       {previews.map(previewId => <img className="source-preview" key={previewId} src={sourcePreviewUrl(analysisId, previewId)} alt={`${finding.source.page_number ?? "문서"}페이지의 개인정보가 제거된 탐지 문구`} />)}
       {previews.length === 0 && <blockquote>{renderSpan(finding.source.masked_text, finding.source.match_span, `${finding.finding_id}-source`)}</blockquote>}
       {previews.length > 0 && <details className="text-source"><summary>마스킹 텍스트로 보기</summary><blockquote>{renderSpan(finding.source.masked_text, finding.source.match_span, `${finding.finding_id}-source`)}</blockquote></details>}
     </section>
+
+    {matchedElements.length > 0 && <section className="risk-structure">
+      <h4>탐지된 위험 구조</h4>
+      <p>단일 단어가 아니라 다음 표현들이 같은 조항에 결합된 구조를 검토합니다.</p>
+      <dl>{matchedElements.map((element, index) => <div key={`${element.label}-${element.span[0]}-${index}`}><dt>{element.label}</dt><dd>{element.excerpt}</dd></div>)}</dl>
+    </section>}
 
     <section>
       <h4>확인할 질문</h4>
@@ -98,7 +105,13 @@ function FindingCard({ finding, analysisId }: { finding: Finding; analysisId: st
         <section><h4>왜 문제 후보인가</h4><p>{explanation.why_flagged}</p></section>
         <section><h4>예상되는 고객 영향</h4><p>{explanation.possible_impact}</p></section>
       </div>
-      <section className="revision"><h4>검토용 대안 조항</h4><p>{explanation.suggested_revision}</p><small>{explanation.disclaimer}</small></section>
+      <section className="revision">
+        <h4>수정 방향</h4>
+        <ul>{(explanation.revision_points ?? explanation.review_points).map(point => <li key={point}>{point}</li>)}</ul>
+        <h4>검토용 예시 문안</h4>
+        <blockquote>{exampleClause}</blockquote>
+        <small>{explanation.disclaimer} 실제 상품 조건과 적용 법령을 확인한 뒤 확정해야 합니다.</small>
+      </section>
       <section><h4>법적 근거 후보</h4>
         {finding.evidence.length === 0 && <p className="muted">검증된 근거를 검색하지 못했습니다. 법령 원문과 시행일을 별도로 확인하세요.</p>}
         {finding.evidence.map(item => <div className="evidence" key={item.evidence_id}><b>{item.title}</b>{item.quoted_excerpt && <q>{item.quoted_excerpt}</q>}<small>{item.authority} · {item.status}{item.relevance_score !== undefined ? ` · 관련도 ${item.relevance_score}` : ""}</small>{item.source_url && <a href={item.source_url} target="_blank" rel="noreferrer noopener">법령 원문 열기</a>}</div>)}
@@ -187,6 +200,7 @@ export function AnalysisWorkspace() {
   const progressState = analysis?.progress?.state ?? analysis?.status;
   const findings = analysis?.result?.findings ?? [];
   const candidateFindings = analysis?.result?.candidate_findings ?? [];
+  const userWarnings = (analysis?.result?.warnings ?? []).filter(warning => warning !== "OPENAI_CONTEXT_OUTPUT_REJECTED");
 
   return <main>
     <section className="hero">
@@ -235,7 +249,7 @@ export function AnalysisWorkspace() {
       {analysis.result?.summary?.headline && <section className="panel document-summary"><h2>핵심 요약</h2>{(analysis.result.summary.lines?.length ? analysis.result.summary.lines : [analysis.result.summary.headline]).map((line, index) => <p key={`${index}-${line}`}>{line}</p>)}</section>}
       {analysis.status === "failed" && <FailurePanel analysis={analysis} onRetry={refresh} />}
       {analysis.disposition === "no_signal" && <section className="no-signal"><h2>검토 신호 없음</h2><p>현재 19개 규칙과 추가 의미 검토에서 위험 신호가 탐지되지 않았습니다. 이는 계약의 안전성이나 적법성을 보장하지 않습니다.</p></section>}
-      {(analysis.result?.warnings ?? []).map(warning => <p className="warning" key={warning}>{warningLabels[warning] ?? warning}</p>)}
+      {userWarnings.map(warning => <p className="warning" key={warning}>{warningLabels[warning] ?? warning}</p>)}
       {findings.map(finding => <FindingCard finding={finding} analysisId={analysis.id} key={finding.finding_id} />)}
       {candidateFindings.length > 0 && <section className="panel"><h2>추가 의미 검토 후보</h2><p className="muted">로컬 의미 모델과 선택적 OpenAI 문맥 검토가 제안한 후보이며, 같은 조문·유형의 규칙 탐지와 중복되는 항목은 제외합니다.</p>{candidateFindings.map(candidate => <CandidateCard candidate={candidate} analysisId={analysis.id} key={candidate.candidate_id} />)}</section>}
       <section className="panel limitations"><h2>데이터 제공 범위</h2><p><b>원문 근거</b>는 탐지된 조항의 개인정보 제거 조각만 표시하며 문서 전문은 브라우저로 전송하지 않습니다.</p><p><b>은행 비교</b>는 검증된 공개·허가 비교 데이터가 아직 없어 순위·추천·비교 결과를 제공하지 않습니다.</p><p><b>리포트</b>는 계약 검토 보조 자료이며, 법률 판단이나 상품 추천이 아닙니다.</p></section>

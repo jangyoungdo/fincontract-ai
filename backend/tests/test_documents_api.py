@@ -80,7 +80,9 @@ def test_txt_upload_analysis_report_and_delete() -> None:
         report_text = "\n".join(page.extract_text() or "" for page in reader.pages)
         assert "왜 문제 후보인가" in report_text
         assert "예상되는 고객 영향" in report_text
-        assert "검토용 대안 조항" in report_text
+        assert "탐지된 위험 구조" in report_text
+        assert "수정 방향" in report_text
+        assert "검토용 예시 문안" in report_text
         assert "법적 근거 후보" in report_text
         assert "검증 상세" in report_text
 

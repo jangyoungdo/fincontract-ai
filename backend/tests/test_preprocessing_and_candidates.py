@@ -120,7 +120,7 @@ def test_pipeline_hides_a_candidate_rejected_by_private_rag_without_new_public_f
     )
     result = pipeline.run("제1조 정상적인 변경 절차를 정한다.")
     assert result["candidate_findings"] == []
-    assert result["result_schema_version"] == "3.0"
+    assert result["result_schema_version"] == "3.1"
     assert "decision_rag" not in result
 
 

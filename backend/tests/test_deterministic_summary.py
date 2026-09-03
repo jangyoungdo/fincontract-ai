@@ -53,7 +53,7 @@ def test_summary_enrichment_is_deterministic_and_marks_schema_version() -> None:
     first = enrich_summaries(result)
     second = enrich_summaries(result)
     assert first == second
-    assert first["result_schema_version"] == "3.0"
+    assert first["result_schema_version"] == "3.1"
     assert first["findings"][0]["summary_sentence"]
 
 

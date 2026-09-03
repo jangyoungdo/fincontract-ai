@@ -33,6 +33,23 @@ class RuleEngineTest(unittest.TestCase):
         self.assertTrue(matches)
         self.assertIn("위법성 결론이 아니며", matches[0].rationale)
 
+    def test_every_match_exposes_all_required_expression_groups(self) -> None:
+        for rule_id, text in {
+            "R02_UNFAIR_TERMINATION": "은행은 필요하다고 인정하는 경우 계약을 해지할 수 있다.",
+            "R18_CUSTOMER_RIGHTS_RESTRICTION": "고객은 계약을 해지할 수 없다.",
+        }.items():
+            with self.subTest(rule_id=rule_id):
+                match = next(item for item in self.engine.screen(text) if item.rule_id == rule_id)
+                self.assertGreaterEqual(len(match.matched_elements), 3)
+                self.assertLessEqual(
+                    match.risk_start,
+                    min(element["span"][0] for element in match.matched_elements),
+                )
+                self.assertGreaterEqual(
+                    match.risk_end,
+                    max(element["span"][1] for element in match.matched_elements),
+                )
+
     def test_unknown_rule_filter_returns_no_matches(self) -> None:
         matches = self.engine.screen(self.cases[0]["text"], rule_ids=["UNKNOWN"])
         self.assertEqual([], matches)
