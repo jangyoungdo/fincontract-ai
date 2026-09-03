@@ -151,6 +151,10 @@ make run-frontend
 
 그 다음 `http://localhost:3000`에서 TXT, PDF 또는 DOCX를 업로드합니다. 브라우저는 Backend 포트에 직접 접속하지 않고 현재 Frontend 주소의 `/api/v1`만 호출합니다. Next.js 서버는 `BACKEND_INTERNAL_URL`(로컬 기본값 `http://127.0.0.1:8000`, Compose `http://backend:8000`)을 통해 Backend로 전달하므로 `127.0.0.1`, LAN IP 또는 터널·프리뷰 도메인으로 Frontend에 접속해도 별도의 브라우저 API 주소 변경이 필요하지 않습니다. 공개 법령 코퍼스는 약관법 7개 조문으로 제한되어 있고 외부 모델 연결은 기본적으로 비활성화되어 있으므로, 화면은 결정론적 규칙 설명과 fake-provider 보충 분석을 구분해 표시합니다.
 
+### 심사용 실험 데이터
+
+첫 방문자가 별도 계약서를 준비하지 않아도 전체 흐름을 확인할 수 있도록 완전한 가상 계약서 PDF 11개를 `frontend/public/demo/fincontract-ai-demo-data-v1.zip`으로 제공합니다. 첫 화면의 다운로드 안내에서 ZIP을 받은 뒤 01번 PDF를 업로드하면 규칙 신호, 의미 검토 후보, 마스킹 원문 근거와 PDF 리포트 흐름을 확인할 수 있습니다. 이 자료는 실제 금융회사·상품·고객과 무관하며 계약 체결이나 법률 판단에 사용할 수 없습니다.
+
 ### OpenAI Responses API 실험
 
 OpenAI 연결은 기존 규칙 탐지를 대체하지 않습니다. `findings[]`는 그대로 보존됩니다.

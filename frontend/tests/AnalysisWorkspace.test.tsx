@@ -83,21 +83,26 @@ describe("AnalysisWorkspace", () => {
   it("shows the legal boundary and upload contract", () => {
     render(<AnalysisWorkspace />);
     expect(screen.getByText("법률 판단이 아닌 검토 보조")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "실험 문서로 바로 확인해 보세요" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /실험용 계약서 11종 다운로드/ })).toHaveAttribute("href", "/demo/fincontract-ai-demo-data-v1.zip");
+    expect(screen.getByRole("link", { name: /실험용 계약서 11종 다운로드/ })).toHaveAttribute("download");
     expect(screen.getByLabelText("계약서 파일")).toHaveAttribute("accept", ".txt,.pdf,.docx");
     expect(screen.getByRole("button", { name: "분석 시작" })).toBeDisabled();
     expect(screen.queryByText("실험군")).not.toBeInTheDocument();
   });
 
-  it("does not invent a bank comparison when no verified dataset exists", () => {
+  it("keeps the first-visit experience focused on the demo workflow", () => {
     render(<AnalysisWorkspace />);
-    expect(screen.getAllByText("은행 비교").length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/순위나 추천은 표시하지 않습니다/).length).toBeGreaterThan(0);
+    expect(screen.getByLabelText("실험 서비스 체험 순서")).toBeInTheDocument();
+    expect(screen.getByText("압축을 풀고 01번 문서를 선택합니다.")).toBeInTheDocument();
+    expect(screen.queryByText("은행 비교")).not.toBeInTheDocument();
   });
 
   it("renders concise summaries, page context, masked evidence, and collapsed detail", async () => {
     const fetchMock = mockUploadResult();
     await upload(fetchMock);
 
+    expect(screen.queryByRole("heading", { name: "실험 문서로 바로 확인해 보세요" })).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "제1조 · PDF 3페이지 · 사업자의 일방적 계약내용 변경" })).toBeInTheDocument();
     expect(screen.getByText("이 문서에서는 계약 변경 관련 규칙 위험 신호 1건이 확인되었습니다.")).toBeInTheDocument();
     expect(screen.getByText("은행 조건과 관련해 변경 위험 신호가 확인되어 적용 범위를 검토해야 합니다.")).toBeInTheDocument();
