@@ -18,6 +18,9 @@ export type FindingExplanation = {
   possible_impact: string;
   review_points: string[];
   suggested_revision: string;
+  revision_points?: string[];
+  example_clause?: string;
+  guidance_version?: string;
   disclaimer: string;
 };
 
@@ -48,6 +51,8 @@ export type Finding = {
     rule_name: string;
     category: string;
     matched_excerpt: string;
+    risk_span?: [number, number];
+    matched_elements?: Array<{ label: string; excerpt: string; span: [number, number] }>;
     match_span?: [number, number];
     signal_strength: string;
     rationale: string;

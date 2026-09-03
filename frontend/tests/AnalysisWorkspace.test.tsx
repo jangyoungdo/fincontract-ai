@@ -12,6 +12,12 @@ const detailedFinding = {
     rule_name: "사업자의 일방적 계약내용 변경",
     category: "unilateral_change",
     matched_excerpt: "일방적으로",
+    risk_span: [0, 14] as [number, number],
+    matched_elements: [
+      { label: "행사 주체", excerpt: "은행", span: [0, 2] as [number, number] },
+      { label: "변경 권한", excerpt: "일방적으로", span: [4, 9] as [number, number] },
+      { label: "변경 행위", excerpt: "변경한다", span: [10, 14] as [number, number] },
+    ],
     signal_strength: "medium",
     rationale: "검토 필요",
   },
@@ -20,6 +26,9 @@ const detailedFinding = {
     possible_impact: "예상하지 못한 비용을 부담할 수 있습니다.",
     review_points: ["변경 전 충분한 통지 기간이 있는지"],
     suggested_revision: "최소 30일 전에 변경 사유를 통지합니다.",
+    revision_points: ["변경 사유를 객관적으로 한정합니다.", "고객에게 거절 선택권을 제공합니다."],
+    example_clause: "불리한 변경은 사전에 개별 통지하고 고객에게 거절 선택권을 제공합니다.",
+    guidance_version: "revision-guidance-v0.1.0",
     disclaimer: "검토용 예시이며 법률 자문이나 확정 수정안이 아닙니다.",
   },
   evidence: [{
@@ -107,12 +116,18 @@ describe("AnalysisWorkspace", () => {
     expect(screen.getByText("이 문서에서는 계약 변경 관련 규칙 위험 신호 1건이 확인되었습니다.")).toBeInTheDocument();
     expect(screen.getByText("은행 조건과 관련해 변경 위험 신호가 확인되어 적용 범위를 검토해야 합니다.")).toBeInTheDocument();
     expect(screen.getAllByText("일방적으로", { selector: "mark" })).toHaveLength(1);
+    expect(screen.getByRole("heading", { name: "탐지된 위험 구조" })).toBeInTheDocument();
+    expect(screen.getByText(/단일 단어가 아니라/)).toBeInTheDocument();
+    expect(screen.getByText("행사 주체")).toBeInTheDocument();
     expect(screen.getByText("법적 근거 추가 확인 필요")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "마스킹된 전체 문서" })).not.toBeInTheDocument();
     expect(screen.getByText("고객의 선택 절차 없이 일방적으로 변경할 수 있는 구조입니다.")).toBeInTheDocument();
     expect(screen.getByText("예상하지 못한 비용을 부담할 수 있습니다.")).toBeInTheDocument();
     expect(screen.getByText("변경 전 충분한 통지 기간이 있는지")).toBeInTheDocument();
-    expect(screen.getByText("최소 30일 전에 변경 사유를 통지합니다.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "수정 방향" })).toBeInTheDocument();
+    expect(screen.getByText("변경 사유를 객관적으로 한정합니다.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "검토용 예시 문안" })).toBeInTheDocument();
+    expect(screen.getByText("불리한 변경은 사전에 개별 통지하고 고객에게 거절 선택권을 제공합니다.")).toBeInTheDocument();
     expect(screen.getByText(/사업자는 상당한 이유 없이/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "법령 원문 열기" })).toHaveAttribute("href", "https://example.invalid/law");
     expect(screen.getByText(/VERIFY_TEST/)).toBeInTheDocument();

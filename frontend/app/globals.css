@@ -66,12 +66,19 @@ mark { background: #ffe08a; color: inherit; padding: 2px 1px; border-radius: 3px
 .verification.failed { color: #8b4b00; background: #fff3d6; }
 .verification.not_run { color: #5b6472; background: #eef1f5; }
 .finding-source blockquote { margin: 0; background: #f6f8fc; border-left: 4px solid #285ed2; padding: 16px; line-height: 1.7; }
+.risk-structure { margin: 16px 0; padding: 14px 16px; border: 1px solid #dce3ed; border-radius: 10px; background: #fafbfd; }
+.risk-structure h4, .risk-structure p { margin-top: 0; }
+.risk-structure dl { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 0; }
+.risk-structure dl div { display: flex; gap: 7px; align-items: center; padding: 7px 10px; border-radius: 8px; background: #fff2cc; }
+.risk-structure dt { color: #755600; font-size: 13px; font-weight: 700; }
+.risk-structure dd { margin: 0; font-weight: 650; }
 .source-preview { display: block; width: 100%; max-height: 460px; object-fit: contain; object-position: left center; border: 1px solid #d8e0ec; border-radius: 10px; background: #eef2f7; }
 .text-source { margin-top: 10px; }
 .text-source summary { color: #4c5f7b; cursor: pointer; }
 .explanation-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 .explanation-grid section { background: #fafbfd; border: 1px solid #e5eaf1; border-radius: 10px; padding: 4px 14px; margin-top: 16px; }
 .revision { background: #f5f8ff; border: 1px solid #b9caef; border-radius: 10px; padding: 4px 14px 14px; margin: 18px 0; }
+.revision blockquote { margin: 8px 0 14px; padding: 14px 16px; border-left: 4px solid #285ed2; background: white; line-height: 1.7; }
 .revision small { display: block; border-top: 1px solid #d6e0f4; padding-top: 10px; }
 
 .evidence { display: grid; gap: 7px; background: #edf3ff; border-radius: 9px; padding: 13px; margin: 8px 0; }

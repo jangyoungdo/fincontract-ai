@@ -147,11 +147,22 @@ def build_pdf_report(analysis_id: str, result: dict | None) -> bytes:
         story.extend([
             Paragraph(f"{index}. {escape(prefix + str(signal.get('rule_name', signal.get('category', '검토 신호'))) + page_suffix)}", heading),
             _paragraph(finding.get("summary_sentence"), body),
-            Paragraph("정확히 탐지된 문구", subheading),
+            Paragraph("위험 표현이 결합된 원문 근거", subheading),
         ])
         preview = _preview_image(analysis_id, finding)
         story.extend([
             preview if preview is not None else _highlighted_source(finding, quote),
+            Paragraph("탐지된 위험 구조", subheading),
+            _paragraph("단일 단어가 아니라 다음 표현들이 같은 조항에 결합된 구조를 검토합니다.", body),
+        ])
+        for element in signal.get("matched_elements", []):
+            story.append(
+                _paragraph(
+                    f"• {element.get('label', '판단 표현')}: {element.get('excerpt', '')}",
+                    body,
+                )
+            )
+        story.extend([
             Paragraph("왜 문제 후보인가", subheading),
             _paragraph(explanation.get("why_flagged"), body),
             Paragraph("예상되는 고객 영향", subheading),
@@ -161,9 +172,20 @@ def build_pdf_report(analysis_id: str, result: dict | None) -> bytes:
         for point in explanation.get("review_points", []):
             story.append(_paragraph(f"• {point}", body))
         story.extend([
-            Paragraph("검토용 대안 조항", subheading),
-            _paragraph(explanation.get("suggested_revision"), revision),
-            _paragraph(explanation.get("disclaimer"), body),
+            Paragraph("수정 방향", subheading),
+        ])
+        for point in explanation.get("revision_points", explanation.get("review_points", [])):
+            story.append(_paragraph(f"• {point}", body))
+        story.extend([
+            Paragraph("검토용 예시 문안", subheading),
+            _paragraph(
+                explanation.get("example_clause", explanation.get("suggested_revision")),
+                revision,
+            ),
+            _paragraph(
+                f"{explanation.get('disclaimer', '')} 실제 상품 조건과 적용 법령을 확인한 뒤 확정해야 합니다.",
+                body,
+            ),
             Paragraph("법적 근거 후보", subheading),
         ])
         evidence_items = finding.get("evidence", [])

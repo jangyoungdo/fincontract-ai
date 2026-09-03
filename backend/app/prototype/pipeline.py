@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 from app.config import get_settings
 from app.llm import ModelRouter, RoutingContext, get_provider
 from app.rules import RuleEngine
+from app.services.revision_guidance import enrich_revision_guidance
 
 from .pii import mask_pii
 
@@ -82,7 +83,11 @@ class PrototypePipeline:
             signal = match.to_dict()
             # Explanations are deterministic rule metadata and remain useful even
             # when the optional model provider is disabled or fails verification.
-            explanation = signal.pop("explanation")
+            explanation = enrich_revision_guidance(
+                match.rule_id,
+                signal.pop("explanation"),
+                signal.get("matched_elements"),
+            )
             candidate_evidence = [
                 {
                     "evidence_id": f"candidate:{match.rule_id}:{basis_index}",
@@ -125,7 +130,10 @@ class PrototypePipeline:
                     "finding_id": f"finding-{index}",
                     "source": {
                         "masked_text": masked_text,
-                        "match_span": signal["match_span"],
+                        # Highlight the full combination that caused the match. The
+                        # original first-pattern span remains in rule_signal for
+                        # API compatibility and deterministic audit trails.
+                        "match_span": signal.get("risk_span", signal["match_span"]),
                     },
                     "rule_signal": signal,
                     "explanation": explanation,

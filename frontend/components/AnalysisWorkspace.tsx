@@ -70,6 +70,8 @@ function FailurePanel({ analysis, onRetry }: { analysis: Analysis; onRetry: () =
 
 function FindingCard({ finding, analysisId }: { finding: Finding; analysisId: string }) {
   const explanation = finding.explanation;
+  const matchedElements = finding.rule_signal.matched_elements ?? [];
+  const exampleClause = explanation.example_clause ?? explanation.suggested_revision;
   const page = finding.source.page_number ? ` · PDF ${finding.source.page_number}페이지` : "";
   const previews = finding.source.preview_status === "available" ? finding.source.preview_ids ?? [] : [];
   return <article className="finding">
@@ -81,11 +83,17 @@ function FindingCard({ finding, analysisId }: { finding: Finding; analysisId: st
     <p className="finding-summary">{finding.summary_sentence}</p>
 
     <section className="finding-source">
-      <h4>실제 문서의 마스킹 원문 근거</h4>
+      <h4>위험 표현이 결합된 원문 근거</h4>
       {previews.map(previewId => <img className="source-preview" key={previewId} src={sourcePreviewUrl(analysisId, previewId)} alt={`${finding.source.page_number ?? "문서"}페이지의 개인정보가 제거된 탐지 문구`} />)}
       {previews.length === 0 && <blockquote>{renderSpan(finding.source.masked_text, finding.source.match_span, `${finding.finding_id}-source`)}</blockquote>}
       {previews.length > 0 && <details className="text-source"><summary>마스킹 텍스트로 보기</summary><blockquote>{renderSpan(finding.source.masked_text, finding.source.match_span, `${finding.finding_id}-source`)}</blockquote></details>}
     </section>
+
+    {matchedElements.length > 0 && <section className="risk-structure">
+      <h4>탐지된 위험 구조</h4>
+      <p>단일 단어가 아니라 다음 표현들이 같은 조항에 결합된 구조를 검토합니다.</p>
+      <dl>{matchedElements.map((element, index) => <div key={`${element.label}-${element.span[0]}-${index}`}><dt>{element.label}</dt><dd>{element.excerpt}</dd></div>)}</dl>
+    </section>}
 
     <section>
       <h4>확인할 질문</h4>
@@ -97,7 +105,13 @@ function FindingCard({ finding, analysisId }: { finding: Finding; analysisId: st
         <section><h4>왜 문제 후보인가</h4><p>{explanation.why_flagged}</p></section>
         <section><h4>예상되는 고객 영향</h4><p>{explanation.possible_impact}</p></section>
       </div>
-      <section className="revision"><h4>검토용 대안 조항</h4><p>{explanation.suggested_revision}</p><small>{explanation.disclaimer}</small></section>
+      <section className="revision">
+        <h4>수정 방향</h4>
+        <ul>{(explanation.revision_points ?? explanation.review_points).map(point => <li key={point}>{point}</li>)}</ul>
+        <h4>검토용 예시 문안</h4>
+        <blockquote>{exampleClause}</blockquote>
+        <small>{explanation.disclaimer} 실제 상품 조건과 적용 법령을 확인한 뒤 확정해야 합니다.</small>
+      </section>
       <section><h4>법적 근거 후보</h4>
         {finding.evidence.length === 0 && <p className="muted">검증된 근거를 검색하지 못했습니다. 법령 원문과 시행일을 별도로 확인하세요.</p>}
         {finding.evidence.map(item => <div className="evidence" key={item.evidence_id}><b>{item.title}</b>{item.quoted_excerpt && <q>{item.quoted_excerpt}</q>}<small>{item.authority} · {item.status}{item.relevance_score !== undefined ? ` · 관련도 ${item.relevance_score}` : ""}</small>{item.source_url && <a href={item.source_url} target="_blank" rel="noreferrer noopener">법령 원문 열기</a>}</div>)}

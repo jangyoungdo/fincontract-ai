@@ -7,6 +7,8 @@ sys.path.insert(0, str(BACKEND_ROOT))
 
 from app.prototype import PrototypePipeline  # noqa: E402
 from app.prototype.pii import mask_pii  # noqa: E402
+from app.services.deterministic_summary import finding_summary  # noqa: E402
+from app.services.revision_guidance import GUIDANCE, GUIDANCE_VERSION  # noqa: E402
 
 
 class PrototypePipelineTest(unittest.TestCase):
@@ -31,8 +33,23 @@ class PrototypePipelineTest(unittest.TestCase):
         self.assertTrue(explanation["why_flagged"])
         self.assertTrue(explanation["possible_impact"])
         self.assertTrue(explanation["review_points"])
+        self.assertEqual("revision-guidance-v0.1.0", explanation["guidance_version"])
+        self.assertEqual(2, len(explanation["revision_points"]))
+        self.assertTrue(explanation["example_clause"])
         self.assertIn("검토용", explanation["disclaimer"])
         self.assertNotIn("explanation", result["findings"][0]["rule_signal"])
+
+    def test_all_rules_have_versioned_drafting_guidance(self) -> None:
+        self.assertEqual(19, len(GUIDANCE))
+        self.assertEqual("revision-guidance-v0.1.0", GUIDANCE_VERSION)
+        forbidden = ("위법하다", "적법하다", "무효이다", "반드시 승소")
+        for rule in self.pipeline.rules.ruleset["rules"]:
+            with self.subTest(rule_id=rule["id"]):
+                point_one, point_two, example_clause = GUIDANCE[rule["id"]]
+                self.assertTrue(point_one)
+                self.assertTrue(point_two)
+                self.assertTrue(example_clause)
+                self.assertFalse(any(term in example_clause for term in forbidden))
 
     def test_arm_d_passes_only_with_retrieved_verified_evidence(self) -> None:
         evidence = [
@@ -98,6 +115,32 @@ class PrototypePipelineTest(unittest.TestCase):
         finding = result["findings"][0]
         start, end = finding["rule_signal"]["match_span"]
         self.assertEqual(finding["rule_signal"]["matched_excerpt"], text[start:end].replace("\n", " "))
+
+    def test_source_span_and_elements_explain_the_complete_risk_structure(self) -> None:
+        text = "고객은 은행의 승인을 받지 않으면 계약을 해지할 수 없다."
+        result = self.pipeline.analyze(text, "A")
+        finding = next(
+            item
+            for item in result["findings"]
+            if item["rule_signal"]["rule_id"] == "R18_CUSTOMER_RIGHTS_RESTRICTION"
+        )
+        signal = finding["rule_signal"]
+        self.assertEqual(
+            ["제한되는 권리", "제한 방식", "영향받는 주체"],
+            [element["label"] for element in signal["matched_elements"]],
+        )
+        self.assertEqual(
+            ["해지", "할 수 없", "고객"],
+            [element["excerpt"] for element in signal["matched_elements"]],
+        )
+        source_start, source_end = finding["source"]["match_span"]
+        source_excerpt = text[source_start:source_end]
+        self.assertIn("고객", source_excerpt)
+        self.assertIn("해지", source_excerpt)
+        self.assertIn("할 수 없", source_excerpt)
+        self.assertNotIn("‘해지’ 문구에서", finding_summary(finding))
+        self.assertIn("고객의 해지권", finding["explanation"]["revision_points"][0])
+        self.assertIn("해지권을 행사할 수 있습니다", finding["explanation"]["example_clause"])
 
     def test_masking_detects_common_identifiers(self) -> None:
         masked = mask_pii("test@example.com, 010-1234-5678, 900101-1234567")
