@@ -16,6 +16,18 @@ a { color: #174fc2; }
 .eyebrow { color: #1555d5; font-weight: 700; }
 .notice, .tag { background: #fff0c7; color: #654800; border-radius: 999px; padding: 8px 12px; font-size: 13px; }
 
+.demo-guide { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(280px, .65fr); gap: 28px; border-color: #b9caef; background: linear-gradient(135deg, #f5f8ff, #fff); }
+.demo-guide-copy h2 { margin: 4px 0 8px; font-size: 28px; }
+.demo-guide-copy > p:not(.eyebrow) { margin: 0 0 18px; }
+.demo-download { display: inline-flex; align-items: center; justify-content: center; gap: 10px; width: fit-content; padding: 13px 17px; border-radius: 10px; background: #174fc2; color: white; font-weight: 750; text-decoration: none; }
+.demo-download span { color: #dce7ff; font-size: 13px; font-weight: 600; }
+.demo-guide-copy small { display: block; margin-top: 10px; }
+.demo-steps { list-style: none; counter-reset: demo-step; display: grid; gap: 10px; margin: 0; padding: 0; }
+.demo-steps li { counter-increment: demo-step; display: grid; grid-template-columns: 34px 1fr; column-gap: 10px; align-items: center; padding: 12px; border: 1px solid #d9e2f3; border-radius: 10px; background: #fff; }
+.demo-steps li::before { content: counter(demo-step); grid-row: 1 / span 2; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: #e3ecff; color: #174ebd; font-weight: 800; }
+.demo-steps b, .demo-steps span { grid-column: 2; }
+.demo-steps span { color: #6d788a; font-size: 14px; line-height: 1.45; }
+
 .stages { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 26px 0; }
 .stages span { background: #e5eaf2; color: #758096; padding: 12px; border-radius: 9px; text-align: center; }
 .stages .active { background: #e3ecff; color: #174ebd; }
@@ -74,6 +86,8 @@ mark { background: #ffe08a; color: inherit; padding: 2px 1px; border-radius: 3px
 @media (max-width: 720px) {
   .hero { display: block; }
   .hero h1 { font-size: 36px; }
+  .demo-guide { grid-template-columns: 1fr; gap: 20px; }
+  .demo-download { width: 100%; flex-wrap: wrap; }
   .stages { grid-template-columns: 1fr 1fr; }
   .explanation-grid { grid-template-columns: 1fr; gap: 0; }
   .summary { align-items: flex-start; }

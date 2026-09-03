@@ -194,6 +194,21 @@ export function AnalysisWorkspace() {
       <span className="notice">법률 판단이 아닌 검토 보조</span>
     </section>
 
+    {!analysis && <section className="panel demo-guide" aria-labelledby="demo-guide-title">
+      <div className="demo-guide-copy">
+        <p className="eyebrow">처음 방문하셨나요?</p>
+        <h2 id="demo-guide-title">실험 문서로 바로 확인해 보세요</h2>
+        <p>FinContract AI는 금융 계약서에서 검토가 필요한 위험 신호를 탐색하는 실험용 서비스입니다. 제공된 가상 계약서 PDF 한 개를 업로드하면 탐지 조항, 확인 질문, 법적 근거 후보와 PDF 리포트를 확인할 수 있습니다.</p>
+        <a className="demo-download" href="/demo/fincontract-ai-demo-data-v1.zip" download>실험용 계약서 11종 다운로드 <span>ZIP · 약 1.2MB</span></a>
+        <small>실제 금융회사·상품·고객과 무관하며 개인정보를 포함하지 않는 가상 문서입니다.</small>
+      </div>
+      <ol className="demo-steps" aria-label="실험 서비스 체험 순서">
+        <li><b>다운로드</b><span>실험 문서 ZIP을 내려받습니다.</span></li>
+        <li><b>PDF 업로드</b><span>압축을 풀고 01번 문서를 선택합니다.</span></li>
+        <li><b>결과 확인</b><span>검토 신호와 PDF 리포트를 확인합니다.</span></li>
+      </ol>
+    </section>}
+
     <nav className="stages" aria-label="분석 단계">
       {stageLabels.map((label, index) => <span key={label} className={analysis || index === 0 ? "active" : ""}>{index + 1}. {label}</span>)}
     </nav>
@@ -225,6 +240,5 @@ export function AnalysisWorkspace() {
       {candidateFindings.length > 0 && <section className="panel"><h2>추가 의미 검토 후보</h2><p className="muted">로컬 의미 모델과 선택적 OpenAI 문맥 검토가 제안한 후보이며, 같은 조문·유형의 규칙 탐지와 중복되는 항목은 제외합니다.</p>{candidateFindings.map(candidate => <CandidateCard candidate={candidate} analysisId={analysis.id} key={candidate.candidate_id} />)}</section>}
       <section className="panel limitations"><h2>데이터 제공 범위</h2><p><b>원문 근거</b>는 탐지된 조항의 개인정보 제거 조각만 표시하며 문서 전문은 브라우저로 전송하지 않습니다.</p><p><b>은행 비교</b>는 검증된 공개·허가 비교 데이터가 아직 없어 순위·추천·비교 결과를 제공하지 않습니다.</p><p><b>리포트</b>는 계약 검토 보조 자료이며, 법률 판단이나 상품 추천이 아닙니다.</p></section>
     </section>}
-    {!analysis && <section className="panel limitations"><h2>은행 비교</h2><p>검증된 공개·허가 비교 데이터가 아직 없습니다. 따라서 순위나 추천은 표시하지 않습니다.</p></section>}
   </main>;
 }
