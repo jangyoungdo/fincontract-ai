@@ -21,7 +21,7 @@ dependencies = [
   "pypdf>=6,<7",
   "redis>=6,<8",
   "reportlab>=4.4,<5",
-  "sentence-transformers>=5.1,<6",
+  "sentence-transformers>=6.0.0,<7",
   "sqlalchemy>=2.0,<3",
   "uvicorn[standard]>=0.35,<1"
 ]
